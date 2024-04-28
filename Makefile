@@ -16,6 +16,8 @@ PROTO_OUTPUT += proto/gen/controller/v1/controller_grpc.pb.go
 
 all: controller
 
+tidy:
+	@go mod tidy
 
 frontend:
 	@docker-compose up --build
@@ -49,6 +51,7 @@ deps:
 
 
 clean:
+	@go mod tidy
 	rm -rf $(BIN_DIR)
 	rm -rf proto/gen
 	rm -rf store.db

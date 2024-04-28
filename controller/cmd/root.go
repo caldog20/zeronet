@@ -66,7 +66,7 @@ var (
 			ctrl := controller.NewController(db, pfix)
 			tokenValidator, err := auth.NewTokenValidator(
 				ctx,
-				"http://10.170.241.66:8080/realms/test/protocol/openid-connect/certs",
+				"http://blue:8080/realms/test/protocol/openid-connect/certs",
 			)
 			if err != nil {
 				log.Fatalf("error creating token validator: %s", err)

@@ -13,11 +13,11 @@ import (
 
 const (
 	ClientID    = "test"
-	AuthURL     = "http://10.170.241.66:8080/realms/test/protocol/openid-connect/auth"
-	TokenURL    = "http://10.170.241.66:8080/realms/test/protocol/openid-connect/token"
+	AuthURL     = "http://blue:8080/realms/test/protocol/openid-connect/auth"
+	TokenURL    = "http://blue:8080/realms/test/protocol/openid-connect/token"
 	RedirectURI = "http://127.0.0.1:8080/callback"
 	Audience    = "zeronet"
-	JWKSURL     = "http://10.170.241.66:8080/realms/test/protocol/openid-connect/certs"
+	JWKSURL     = "http://blue:8080/realms/test/protocol/openid-connect/certs"
 )
 
 type TokenValidator struct {
