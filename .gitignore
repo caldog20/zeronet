@@ -41,6 +41,8 @@ patches/
 proto/gen
 
 # Test executables
+cmd/client
+cmd/blah
 cmd/testing
 cmd/wintun-test
 
