@@ -8,6 +8,7 @@ on:
     branches: [ "none" ]
     paths:
       - '**.go'
+      - '**.proto'
   pull_request:
     branches: [ "none" ]
 
