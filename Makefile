@@ -51,7 +51,6 @@ deps:
 
 
 clean:
-	@go mod tidy
 	rm -rf $(BIN_DIR)
 	rm -rf proto/gen
 	rm -rf store.db

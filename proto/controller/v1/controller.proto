@@ -1,22 +1,15 @@
 syntax = "proto3";
 
 package proto;
-
 option go_package = "github.com/caldog20/zeronet/proto/gen;controllerv1";
+
+import "controller/v1/peer.proto";
+import "controller/v1/auth.proto";
 
 service ControllerService {
   rpc LoginPeer(LoginPeerRequest) returns (LoginPeerResponse) {}
   rpc GetPKCEAuthInfo(GetPKCEAuthInfoRequest)
       returns (GetPKCEAuthInfoResponse) {}
-}
-
-message GetPKCEAuthInfoRequest {}
-message GetPKCEAuthInfoResponse {
-  string client_id = 1;
-  string auth_endpoint = 2;
-  string token_endpoint = 3;
-  string redirect_uri = 4;
-  string audience = 5;
 }
 
 message LoginPeerRequest {
@@ -28,19 +21,3 @@ message LoginPeerRequest {
 }
 
 message LoginPeerResponse { PeerConfig config = 2; }
-
-message Peer {
-  string machine_id = 1;
-  uint32 id = 2;
-  string public_key = 3;
-  string hostname = 4;
-  string ip = 5;
-  string endpoint = 6;
-  string prefix = 7;
-}
-
-message PeerConfig {
-  uint32 peer_id = 1;
-  string tunnel_ip = 2;
-  string prefix = 3;
-}
