@@ -3,7 +3,6 @@ package types
 import (
 	"time"
 
-	"github.com/caldog20/zeronet/controller/auth"
 	ctrlv1 "github.com/caldog20/zeronet/proto/gen/controller/v1"
 )
 
@@ -18,7 +17,7 @@ type Peer struct {
 
 	LoggedIn bool
 	User     string
-	JWT      string
+	// JWT      string
 
 	LastLogin time.Time
 	LastAuth  time.Time
@@ -37,7 +36,7 @@ func (p *Peer) Copy() *Peer {
 		p.Hostname,
 		p.LoggedIn,
 		p.User,
-		p.JWT,
+		// p.JWT,
 		p.LastLogin,
 		p.LastAuth,
 		p.CreatedAt,
@@ -65,16 +64,32 @@ func (p *Peer) ProtoConfig() *ctrlv1.PeerConfig {
 	}
 }
 
-func (p *Peer) ValidateToken(token string) bool {
-	if token != p.JWT {
-		return false
-	}
-	if p.IsAuthExpired() {
-		return false
-	}
-	return true
+func (p *Peer) IsLoggedIn() bool {
+	return p.LoggedIn
 }
 
+// func (p *Peer) ValidateToken(token string) bool {
+// 	if token != p.JWT {
+// 		return false
+// 	}
+// 	if p.IsAuthExpired() {
+// 		return false
+// 	}
+// 	return true
+// }
+
 func (p *Peer) IsAuthExpired() bool {
-	return auth.IsJwtExpired(p.JWT)
+	now := time.Now()
+	// get duration passed since last auth until now
+	duration := now.Sub(p.LastAuth)
+
+	// Get days from duration
+	days := duration.Hours() / 24
+
+	// if 30+ days have passed, auth is expired
+	return days >= 30
+}
+
+func (p *Peer) UpdateAuth() {
+	p.LastAuth = time.Now()
 }

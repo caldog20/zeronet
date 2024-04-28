@@ -2,11 +2,13 @@ package middleware
 
 import (
 	"context"
-	"log"
+	"strings"
 
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"github.com/caldog20/zeronet/controller/auth"
@@ -37,12 +39,28 @@ func authorizeJwt(ctx context.Context, method string) error {
 		return status.Errorf(codes.Unauthenticated, "authorization token is not provided")
 	}
 	jwtToken := values[0]
-
+	// TODO: Verify JWT matches current Peer JWT even if it's valid
+	// This prevents a leaked JWT from being used with another peer
 	_, err := auth.ParseJwtWithClaims(jwtToken)
 	if err != nil {
 		return status.Errorf(codes.Unauthenticated, "jwt token is invalid: %v", err)
 	}
 	return nil
+}
+
+func NewUnaryLogInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		p, _ := peer.FromContext(ctx)
+		splitMethod := strings.Split(info.FullMethod, "/")
+		var method string
+		if len(splitMethod) < 3 {
+			method = info.FullMethod
+		} else {
+			method = splitMethod[2]
+		}
+		log.Printf("--> unary log interceptor: %s - peer: %s", method, p.Addr.String())
+		return handler(ctx, req)
+	}
 }
 
 func NewUnaryAuthInterceptor() grpc.UnaryServerInterceptor {

@@ -27,10 +27,7 @@ message LoginPeerRequest {
   string access_token = 5;
 }
 
-message LoginPeerResponse {
-  string jwt = 1;
-  PeerConfig config = 2;
-}
+message LoginPeerResponse { PeerConfig config = 2; }
 
 message Peer {
   string machine_id = 1;

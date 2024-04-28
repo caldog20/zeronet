@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/caldog20/zeronet/controller/auth"
 	"github.com/caldog20/zeronet/controller/db"
 	"github.com/caldog20/zeronet/controller/types"
 	ctrlv1 "github.com/caldog20/zeronet/proto/gen/controller/v1"
@@ -20,7 +19,10 @@ type Controller struct {
 	currentPeers sync.Map
 }
 
-func NewController(db *db.Store, prefix netip.Prefix) *Controller {
+func NewController(
+	db *db.Store,
+	prefix netip.Prefix,
+) *Controller {
 	return &Controller{db: db, prefix: prefix}
 }
 
@@ -34,16 +36,32 @@ func (c *Controller) ProcessPeerLogin(peer *types.Peer, req *ctrlv1.LoginPeerReq
 	peer.NoisePublicKey = req.GetPublicKey() // TODO: Validate public key
 	peer.Hostname = req.GetHostname()
 	peer.Endpoint = req.GetEndpoint()
+	peer.LoggedIn = true
 
+	// Update peer in database
 	err := c.db.UpdatePeer(peer)
 	if err != nil {
 		return err
 	}
-
+	// Add to map of current peers logged in
 	c.currentPeers.Store(peer.ID, true)
 
 	// Handle peer login event here
 	//go c.PeerLoginEvent(peer.Copy())
+	return nil
+}
+
+func (c *Controller) LogoutPeer(peer *types.Peer) error {
+	peer.LoggedIn = false
+	c.currentPeers.Delete(peer.ID)
+
+	// Handle per logout event here
+	// go c.PeerLogoutEvent(peer.Copy())
+
+	err := c.db.UpdatePeer(&types.Peer{ID: peer.ID, LoggedIn: false})
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -53,10 +71,10 @@ func (c *Controller) RegisterPeer(req *ctrlv1.LoginPeerRequest) (*types.Peer, er
 		return nil, err
 	}
 
-	jwt, err := auth.GenerateJwtWithClaims()
-	if err != nil {
-		return nil, err
-	}
+	// jwt, err := auth.GenerateJwtWithClaims()
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	newPeer := &types.Peer{
 		MachineID:      req.GetMachineId(),
@@ -65,7 +83,8 @@ func (c *Controller) RegisterPeer(req *ctrlv1.LoginPeerRequest) (*types.Peer, er
 		Prefix:         c.prefix.String(),
 		IP:             ip,
 		Endpoint:       req.GetEndpoint(),
-		JWT:            jwt,
+		LoggedIn:       false,
+		LastAuth:       time.Now(),
 	}
 
 	err = c.db.CreatePeer(newPeer)

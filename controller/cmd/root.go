@@ -3,13 +3,13 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"net/netip"
 	"os"
 	"os/signal"
 	"syscall"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -28,6 +28,7 @@ var (
 	autoCert      bool
 	grpcPort      uint16
 	discoveryPort uint16
+	debug         bool
 
 	rootCmd = &cobra.Command{
 		Use:   "controller",
@@ -42,9 +43,17 @@ var (
 				cancel()
 			}()
 
+			// Current uses logrus default logger with some tweaks
+			log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
+			if debug {
+				log.SetLevel(log.DebugLevel)
+			} else {
+				log.SetLevel(log.InfoLevel)
+			}
+
 			// TODO Implement config stuff/multiple commands
 			log.Printf("initializing sqlite store using file: %s", storePath)
-			db, err := db.New(storePath)
+			db, err := db.New(storePath, log.WithField("type", "gorm"))
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -55,15 +64,16 @@ var (
 			}
 
 			ctrl := controller.NewController(db, pfix)
-			auth.StartKeyVerifier()
-			//err = ctrl.CreateAdminUser()
-			//if err != nil {
-			//	log.Println(err)
-			//}
-
+			tokenValidator, err := auth.NewTokenValidator(
+				ctx,
+				"http://10.170.241.66:8080/realms/test/protocol/openid-connect/certs",
+			)
+			if err != nil {
+				log.Fatalf("error creating token validator: %s", err)
+			}
 			// GRPC Server
-			grpcServer := controller.NewGRPCServer(ctrl)
-			server := grpc.NewServer(grpc.UnaryInterceptor(middleware.NewUnaryAuthInterceptor()))
+			grpcServer := controller.NewGRPCServer(ctrl, tokenValidator)
+			server := grpc.NewServer(grpc.UnaryInterceptor(middleware.NewUnaryLogInterceptor()))
 			controllerv1.RegisterControllerServiceServer(server, grpcServer)
 			reflection.Register(server)
 
@@ -102,6 +112,8 @@ func init() {
 		BoolVar(&autoCert, "autocert", false, "enable autocert for controller")
 	rootCmd.PersistentFlags().
 		Uint16Var(&grpcPort, "grpcport", 50000, "port to listen for grpc connections")
+	rootCmd.PersistentFlags().
+		BoolVar(&debug, "debug", true, "enable debug logging")
 }
 
 // TODO handle signals and contextual things here

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/MicahParks/keyfunc/v3"
 	"github.com/golang-jwt/jwt/v5"
@@ -21,15 +20,21 @@ const (
 	JWKSURL     = "http://10.170.241.66:8080/realms/test/protocol/openid-connect/certs"
 )
 
-var myKeyFunc keyfunc.Keyfunc
+type TokenValidator struct {
+	kf keyfunc.Keyfunc
+}
 
-func StartKeyVerifier() {
-	var err error
-	myKeyFunc, err = keyfunc.NewDefaultCtx(context.Background(), []string{JWKSURL})
+func NewTokenValidator(ctx context.Context, jwks ...string) (*TokenValidator, error) {
+	var jwksURLs []string
+	for _, url := range jwks {
+		jwksURLs = append(jwksURLs, url)
+	}
+	kf, err := keyfunc.NewDefaultCtx(ctx, jwksURLs)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
+	return &TokenValidator{kf: kf}, nil
 }
 
 // var oauthConfig = &oauth2.Config{
@@ -41,8 +46,8 @@ func StartKeyVerifier() {
 // 	RedirectURL: RedirectURI,
 // }
 
-func ValidatePKCEAccessToken(token string) error {
-	tok, err := jwt.Parse(token, myKeyFunc.Keyfunc)
+func (t *TokenValidator) ValidateAccessToken(token string) error {
+	tok, err := jwt.Parse(token, t.kf.Keyfunc)
 
 	if err != nil {
 		return fmt.Errorf("error parsing access token: %s", err)
