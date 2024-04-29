@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/MicahParks/keyfunc/v3"
 	"github.com/golang-jwt/jwt/v5"
@@ -56,6 +57,15 @@ func (t *TokenValidator) ValidateAccessToken(token string) error {
 	// Check if the token is valid.
 	if !tok.Valid {
 		return errors.New("access token is invalid")
+	}
+
+	aud, err := tok.Claims.GetAudience()
+	if err != nil {
+		return err
+	}
+
+	if !slices.Contains(aud, Audience) {
+		return errors.New("access token audience invalid")
 	}
 	return nil
 }

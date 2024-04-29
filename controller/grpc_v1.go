@@ -53,9 +53,11 @@ func (s *GRPCServer) LoginPeer(
 			)
 			return nil, status.Error(codes.InvalidArgument, "machine ID mismatch for peer")
 		}
+
 		// Check peer auth hasn't expired
 		if peer.IsAuthExpired() {
 			log.Debugf("peer %s auth is expired", peer.MachineID)
+
 			// Validate Access Token for reauthenticating peer
 			if err := s.validateAccessToken(req.GetAccessToken(), true); err != nil {
 				log.Debugf("peer %s access token is invalid", peer.MachineID)
@@ -64,6 +66,7 @@ func (s *GRPCServer) LoginPeer(
 				}
 				return nil, err
 			}
+
 			// Access Token was validated, update peer LastAuth now before Login attempt
 			log.Debugf("peer %s reauth successful", peer.MachineID)
 			peer.UpdateAuth()
@@ -78,7 +81,6 @@ func (s *GRPCServer) LoginPeer(
 		}
 	} else {
 		// Peer was not found, try to register if access token is present/valid
-
 		log.Debugf("peer registration processing")
 		if err := s.validateAccessToken(req.GetAccessToken(), false); err != nil {
 			log.Debugf("peer registration failed. invalid access token")
@@ -96,16 +98,16 @@ func (s *GRPCServer) LoginPeer(
 }
 
 func (s *GRPCServer) validateAccessToken(token string, reauth bool) error {
-	errMsg := "peer registration failed, access token is invalid"
-	if reauth {
-		errMsg = "peer reauth failed, access token is invalid"
-	}
+	// errMsg := "peer registration failed, access token is invalid"
+	// if reauth {
+	// 	errMsg = "peer reauth failed, access token is invalid"
+	// }
 
 	err := s.tokenValidator.ValidateAccessToken(token)
 	if err != nil {
 		return status.Error(
 			codes.Unauthenticated,
-			errMsg,
+			err.Error(),
 		)
 	}
 	return nil
