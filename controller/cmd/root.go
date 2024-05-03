@@ -119,7 +119,7 @@ func init() {
 	rootCmd.PersistentFlags().
 		Uint16Var(&grpcPort, "grpcport", 50000, "port to listen for grpc connections")
 	rootCmd.PersistentFlags().
-		BoolVar(&debug, "debug", true, "enable debug logging")
+		BoolVar(&debug, "debug", false, "enable debug logging")
 	rootCmd.PersistentFlags().
 		Uint16Var(&httpPort, "httpport", 8080, "port to listen for http connections")
 }
