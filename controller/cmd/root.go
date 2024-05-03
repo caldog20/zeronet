@@ -33,7 +33,7 @@ var (
 
 	rootCmd = &cobra.Command{
 		Use:   "controller",
-		Short: "Overlay Controller",
+		Short: "ZeroNet Controller",
 		Long:  "",
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx, cancel := context.WithCancel(context.Background())
