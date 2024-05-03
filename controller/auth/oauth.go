@@ -2,8 +2,12 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"os"
+	"time"
 
 	"github.com/MicahParks/keyfunc/v3"
 	"github.com/golang-jwt/jwt/v5"
@@ -11,30 +15,67 @@ import (
 	ctrlv1 "github.com/caldog20/zeronet/proto/gen/controller/v1"
 )
 
-const (
-	ClientID    = ""
-	AuthURL     = "https://dev-kfiweexuq8f5l71y.us.auth0.com/authorize"
-	TokenURL    = "https://dev-kfiweexuq8f5l71y.us.auth0.com/oauth/token"
-	RedirectURI = "http://127.0.0.1:8080/callback"
-	Audience    = "zeronet"
-	JWKSURL     = "https://dev-kfiweexuq8f5l71y.us.auth0.com/.well-known/jwks.json"
-)
-
-type TokenValidator struct {
-	kf keyfunc.Keyfunc
+type OpenIDConfig struct {
+	Issuer        string   `json:"issuer"`
+	AuthEndpoint  string   `json:"authorization_endpoint"`
+	TokenEndpoint string   `json:"token_endpoint"`
+	JWKSEndpoint  string   `json:"jwks_uri"`
+	Scopes        []string `json:"scopes_supported"`
+	Claims        []string `json:"claims_supported"`
 }
 
-func NewTokenValidator(ctx context.Context, jwks ...string) (*TokenValidator, error) {
-	var jwksURLs []string
-	for _, url := range jwks {
-		jwksURLs = append(jwksURLs, url)
-	}
-	kf, err := keyfunc.NewDefaultCtx(ctx, jwksURLs)
+type TokenValidator struct {
+	kf          keyfunc.Keyfunc
+	config      *OpenIDConfig
+	clientID    string
+	audience    string
+	redirectUri string
+}
+
+func NewTokenValidator(ctx context.Context) (*TokenValidator, error) {
+	config, err := getOpenIDConfiguration(os.Getenv("OPENID_CONFIG_URL"))
+
 	if err != nil {
 		return nil, err
 	}
 
-	return &TokenValidator{kf: kf}, nil
+	fmt.Println(config)
+
+	kf, err := keyfunc.NewDefaultCtx(ctx, []string{config.JWKSEndpoint})
+	if err != nil {
+		return nil, err
+	}
+
+	clientID := os.Getenv("OPENID_CLIENT_ID")
+	audience := os.Getenv("OPENID_AUDIENCE")
+	redirectUri := os.Getenv("OPENID_CALLBACK_URL")
+
+	return &TokenValidator{
+		kf:          kf,
+		config:      config,
+		clientID:    clientID,
+		audience:    audience,
+		redirectUri: redirectUri,
+	}, nil
+}
+
+func getOpenIDConfiguration(url string) (*OpenIDConfig, error) {
+	config := &OpenIDConfig{}
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	err = json.NewDecoder(resp.Body).Decode(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 // var oauthConfig = &oauth2.Config{
@@ -69,12 +110,12 @@ func (t *TokenValidator) ValidateAccessToken(token string) error {
 	return nil
 }
 
-func GetPKCEAuthInfo() *ctrlv1.GetPKCEAuthInfoResponse {
+func (t *TokenValidator) GetPKCEAuthInfo() *ctrlv1.GetPKCEAuthInfoResponse {
 	return &ctrlv1.GetPKCEAuthInfoResponse{
-		ClientId:      ClientID,
-		AuthEndpoint:  AuthURL,
-		TokenEndpoint: TokenURL,
-		RedirectUri:   RedirectURI,
-		Audience:      Audience,
+		ClientId:      t.clientID,
+		AuthEndpoint:  t.config.AuthEndpoint,
+		TokenEndpoint: t.config.TokenEndpoint,
+		RedirectUri:   t.redirectUri,
+		Audience:      t.audience,
 	}
 }

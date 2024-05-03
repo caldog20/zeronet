@@ -20,14 +20,17 @@ tidy:
 	@go mod tidy
 
 frontend:
-	@docker-compose up --build
+	@npm i --prefix controller/frontend
+	@npm run build --prefix controller/frontend
 
 docker-controller:
 	@docker-compose build controller
 	@docker-compose up controller
 
-controller: buf
+generate:
 	go generate ./...
+
+controller: buf
 	go build -o $(BIN_DIR)/controller cmd/controller/main.go
 
 run-controller: controller

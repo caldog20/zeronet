@@ -1,0 +1,46 @@
+services:
+  controller:
+    container_name: zeronet-controller
+    build:
+      context: .
+      dockerfile: controller/Dockerfile
+      target: final
+      args:
+        OPENID_DOMAIN:
+        OPENID_CLIENT_ID:
+        OPENID_CALLBACK_URL:
+        OPENID_AUDIENCE:
+
+    ports:
+      - 8080:8080/tcp
+      - 50000:50000/tcp
+    volumes:
+      #      - controller-data:/usr/share/overlay/data
+      - type: bind
+        source: .
+        target: /home/zeronet/data
+    environment:
+      OPENID_CLIENT_ID: ${OPENID_CLIENT_ID}
+      OPENID_CONFIG_URL: ${OPENID_CONFIG_URL}
+      OPENID_AUDIENCE: ${OPENID_AUDIENCE}
+      OPENID_CALLBACK_URL: ${OPENID_CALLBACK_URL}
+
+  # node:
+  #   privileged: true
+  #   build:
+  #     context: .
+  #     dockerfile: node/Dockerfile
+  #     target: final
+  #   environment:
+  #     - 'CONTROLLER=10.170.241.193:50000'
+  #     - 'HOME=/root'
+#  frontend:
+#    build:
+#      context: controller/frontend
+#      target: final
+#    ports:
+#      - 5173:8000
+
+
+volumes:
+  controller-data:

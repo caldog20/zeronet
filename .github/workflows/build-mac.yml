@@ -5,12 +5,12 @@ name: ZeroNet Mac Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "test" ]
     paths:
       - '**.go'
       - '**.proto'
   pull_request:
-    branches: [ "main" ]
+    branches: [ "test" ]
 
 jobs:
 

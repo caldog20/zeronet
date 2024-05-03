@@ -26,7 +26,7 @@ func (s *GRPCServer) GetPKCEAuthInfo(
 	ctx context.Context,
 	req *ctrlv1.GetPKCEAuthInfoRequest,
 ) (*ctrlv1.GetPKCEAuthInfoResponse, error) {
-	return auth.GetPKCEAuthInfo(), nil
+	return s.tokenValidator.GetPKCEAuthInfo(), nil
 }
 
 func (s *GRPCServer) LoginPeer(

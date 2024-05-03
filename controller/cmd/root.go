@@ -65,10 +65,8 @@ var (
 			}
 
 			ctrl := controller.NewController(db, pfix)
-			tokenValidator, err := auth.NewTokenValidator(
-				ctx,
-				auth.JWKSURL,
-			)
+
+			tokenValidator, err := auth.NewTokenValidator(ctx)
 			if err != nil {
 				log.Fatalf("error creating token validator: %s", err)
 			}
