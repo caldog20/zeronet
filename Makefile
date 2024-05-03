@@ -27,6 +27,7 @@ docker-controller:
 	@docker-compose up controller
 
 controller: buf
+	go generate ./...
 	go build -o $(BIN_DIR)/controller cmd/controller/main.go
 
 run-controller: controller

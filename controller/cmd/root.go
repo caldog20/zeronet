@@ -27,6 +27,7 @@ var (
 	prefix        string
 	autoCert      bool
 	grpcPort      uint16
+	httpPort      uint16
 	discoveryPort uint16
 	debug         bool
 
@@ -66,7 +67,7 @@ var (
 			ctrl := controller.NewController(db, pfix)
 			tokenValidator, err := auth.NewTokenValidator(
 				ctx,
-				"http://blue:8080/realms/test/protocol/openid-connect/certs",
+				auth.JWKSURL,
 			)
 			if err != nil {
 				log.Fatalf("error creating token validator: %s", err)
@@ -77,6 +78,7 @@ var (
 			controllerv1.RegisterControllerServiceServer(server, grpcServer)
 			reflection.Register(server)
 
+			httpServer := controller.NewHTTPServer(ctrl)
 			eg, egCtx := errgroup.WithContext(ctx)
 
 			eg.Go(func() error {
@@ -88,10 +90,16 @@ var (
 				return server.Serve(conn)
 			})
 
+			eg.Go(func() error {
+				log.Printf("starting http server on port: %d", httpPort)
+				return httpServer.Serve(fmt.Sprintf(":%d", httpPort))
+			})
+
 			// Cleanup
 			eg.Go(func() error {
 				<-egCtx.Done()
 				server.GracefulStop()
+				httpServer.Close(context.Background())
 				return err
 			})
 
@@ -114,6 +122,8 @@ func init() {
 		Uint16Var(&grpcPort, "grpcport", 50000, "port to listen for grpc connections")
 	rootCmd.PersistentFlags().
 		BoolVar(&debug, "debug", true, "enable debug logging")
+	rootCmd.PersistentFlags().
+		Uint16Var(&httpPort, "httpport", 8080, "port to listen for http connections")
 }
 
 // TODO handle signals and contextual things here

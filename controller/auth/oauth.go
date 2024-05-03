@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 
 	"github.com/MicahParks/keyfunc/v3"
 	"github.com/golang-jwt/jwt/v5"
@@ -13,12 +12,12 @@ import (
 )
 
 const (
-	ClientID    = "test"
-	AuthURL     = "http://blue:8080/realms/test/protocol/openid-connect/auth"
-	TokenURL    = "http://blue:8080/realms/test/protocol/openid-connect/token"
+	ClientID    = ""
+	AuthURL     = "https://dev-kfiweexuq8f5l71y.us.auth0.com/authorize"
+	TokenURL    = "https://dev-kfiweexuq8f5l71y.us.auth0.com/oauth/token"
 	RedirectURI = "http://127.0.0.1:8080/callback"
 	Audience    = "zeronet"
-	JWKSURL     = "http://blue:8080/realms/test/protocol/openid-connect/certs"
+	JWKSURL     = "https://dev-kfiweexuq8f5l71y.us.auth0.com/.well-known/jwks.json"
 )
 
 type TokenValidator struct {
@@ -59,14 +58,14 @@ func (t *TokenValidator) ValidateAccessToken(token string) error {
 		return errors.New("access token is invalid")
 	}
 
-	aud, err := tok.Claims.GetAudience()
-	if err != nil {
-		return err
-	}
+	// aud, err := tok.Claims.GetAudience()
+	// if err != nil {
+	// 	return err
+	// }
 
-	if !slices.Contains(aud, Audience) {
-		return errors.New("access token audience invalid")
-	}
+	// if !slices.Contains(aud, Audience) {
+	// 	return errors.New("access token audience invalid")
+	// }
 	return nil
 }
 
