@@ -76,7 +76,7 @@ var (
 			controllerv1.RegisterControllerServiceServer(server, grpcServer)
 			reflection.Register(server)
 
-			httpServer := controller.NewHTTPServer(ctrl)
+			httpServer := controller.NewHTTPServer(ctrl, tokenValidator)
 			eg, egCtx := errgroup.WithContext(ctx)
 
 			eg.Go(func() error {

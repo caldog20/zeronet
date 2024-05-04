@@ -7,12 +7,12 @@ import (
 )
 
 type Peer struct {
-	MachineID      string `gorm:"unique,not null"`
-	ID             uint32 `gorm:"primaryKey,autoIncrement"`
-	NoisePublicKey string `gorm:"uniqueIndex,not null"`
-	IP             string `gorm:"uniqueIndex"`
-	Prefix         string `gorm:"not null"`
-	Endpoint       string
+	MachineID      string `json:"machine_id" gorm:"unique,not null"`
+	ID             uint32 `json:"-"          gorm:"primaryKey,autoIncrement"`
+	NoisePublicKey string `json:"-"          gorm:"uniqueIndex,not null"`
+	IP             string `json:"ip"         gorm:"uniqueIndex"`
+	Prefix         string `json:"prefix"     gorm:"not null"`
+	Endpoint       string `json:"-"`
 	Hostname       string
 
 	LoggedIn bool

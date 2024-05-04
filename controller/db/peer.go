@@ -13,6 +13,16 @@ func (s *Store) GetPeerByMachineID(machineID string) *types.Peer {
 	return &peer
 }
 
+func (s *Store) GetPeers() ([]types.Peer, error) {
+	var peers []types.Peer
+	result := s.db.Find(&peers)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return peers, nil
+
+}
+
 func (s *Store) GetPeerbyID(id uint32) *types.Peer {
 	var peer types.Peer
 	err := s.db.First(&types.Peer{}, id).Error

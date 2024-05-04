@@ -36,6 +36,7 @@
 		auth0Client = await auth.createClient();
 		isAuthenticated.set(await auth0Client.isAuthenticated());
 		user.set(await auth0Client.getUser());
+    token.set(await auth0Client.getTokenSilently({"audience": "zeronet"}))
 	});
 
 	function login() {
@@ -62,15 +63,16 @@
 
 </script> 
 {#if !$isAuthenticated}
-  <div class="loginButton center">
-          <a
-            class="btn btn-primary btn-lg mr-auto ml-auto variant-ghost-surface"
-            href="/#"
-            role="button"
-            on:click="{login}"
-            >Log In</a
-          >
-        </div>
+  <!-- <div class="loginButton center"> -->
+  <!--         <a -->
+  <!--           class="btn btn-primary btn-lg mr-auto ml-auto variant-ghost-surface" -->
+  <!--           href="/#" -->
+  <!--           role="button" -->
+  <!--           on:click="{login}" -->
+  <!--           >Log In</a -->
+  <!--         > -->
+  <!--       </div> -->
+  <slot />
   {:else}
 
 <Drawer>
