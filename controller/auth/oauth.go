@@ -34,12 +34,9 @@ type TokenValidator struct {
 
 func NewTokenValidator(ctx context.Context) (*TokenValidator, error) {
 	config, err := getOpenIDConfiguration(os.Getenv("OPENID_CONFIG_URL"))
-
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Println(config)
 
 	kf, err := keyfunc.NewDefaultCtx(ctx, []string{config.JWKSEndpoint})
 	if err != nil {
