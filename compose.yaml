@@ -15,10 +15,7 @@ services:
       - 8080:8080/tcp
       - 50000:50000/tcp
     volumes:
-      #      - controller-data:/usr/share/overlay/data
-      - type: bind
-        source: .
-        target: /home/zeronet/data
+      - controller-data:/home/zeronet/data
     environment:
       OPENID_CLIENT_ID: ${OPENID_CLIENT_ID}
       OPENID_CONFIG_URL: ${OPENID_CONFIG_URL}

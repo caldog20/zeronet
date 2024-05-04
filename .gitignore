@@ -46,5 +46,4 @@ cmd/blah
 cmd/testing
 cmd/wintun-test
 **/*.env
-.env
 TODO.md
