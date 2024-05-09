@@ -24,6 +24,7 @@ import (
 	"github.com/caldog20/zeronet/controller/db"
 	"github.com/caldog20/zeronet/controller/middleware"
 	controllerv1 "github.com/caldog20/zeronet/proto/gen/controller/v1"
+	"github.com/caldog20/zeronet/third_party"
 )
 
 var (
@@ -118,6 +119,7 @@ var (
 						mux.ServeHTTP(w, r)
 						return
 					}
+					getOpenAPIHandler().ServeHTTP(w, r)
 				}),
 			}
 
@@ -143,6 +145,10 @@ var (
 		},
 	}
 )
+
+func getOpenAPIHandler() http.Handler {
+	return http.FileServer(http.FS(third_party.OpenAPI))
+}
 
 func init() {
 	rootCmd.PersistentFlags().
