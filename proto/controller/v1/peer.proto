@@ -11,6 +11,8 @@ message Peer {
   string ip = 5;
   string endpoint = 6;
   string prefix = 7;
+  string user = 8;
+  bool logged_in = 9;
 }
 
 message PeerConfig {

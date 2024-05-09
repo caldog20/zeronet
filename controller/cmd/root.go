@@ -4,15 +4,19 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"net/netip"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
 	"github.com/caldog20/zeronet/controller"
@@ -76,7 +80,6 @@ var (
 			controllerv1.RegisterControllerServiceServer(server, grpcServer)
 			reflection.Register(server)
 
-			httpServer := controller.NewHTTPServer(ctrl, tokenValidator)
 			eg, egCtx := errgroup.WithContext(ctx)
 
 			eg.Go(func() error {
@@ -88,16 +91,48 @@ var (
 				return server.Serve(conn)
 			})
 
-			eg.Go(func() error {
-				log.Printf("starting http server on port: %d", httpPort)
-				return httpServer.Serve(fmt.Sprintf(":%d", httpPort))
-			})
+			// HTTP Server
+			// httpServer := controller.NewHTTPServer(ctrl, tokenValidator)
+			// eg.Go(func() error {
+			// 	log.Printf("starting http server on port: %d", httpPort)
+			// 	return httpServer.Serve(fmt.Sprintf(":%d", httpPort))
+			// })
 
+			mux := runtime.NewServeMux()
+			opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+			err = controllerv1.RegisterControllerServiceHandlerFromEndpoint(
+				egCtx,
+				mux,
+				"localhost:50000",
+				opts,
+			)
+
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			gwServer := &http.Server{
+				Addr: ":8080",
+				Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if strings.HasPrefix(r.URL.Path, "/api") {
+						mux.ServeHTTP(w, r)
+						return
+					}
+				}),
+			}
+
+			eg.Go(func() error {
+				if err := gwServer.ListenAndServe(); err != http.ErrServerClosed {
+					return err
+				}
+				return nil
+			})
 			// Cleanup
 			eg.Go(func() error {
 				<-egCtx.Done()
 				server.GracefulStop()
-				httpServer.Close(context.Background())
+				gwServer.Shutdown(context.Background())
+				// httpServer.Close(context.Background())
 				return err
 			})
 

@@ -7,23 +7,8 @@
 ################################################################################
 # Create a stage for building the application.
 ARG GO_VERSION=1.22
-FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS build
-
-ARG OPENID_DOMAIN
-ARG OPENID_CLIENT_ID
-ARG OPENID_CALLBACK_URL
-ARG OPENID_AUDIENCE
-
-ENV VITE_AUTH0_BASE_URL $OPENID_DOMAIN
-ENV VITE_AUTH0_CLIENT_ID $OPENID_CLIENT_ID
-ENV VITE_AUTH0_CALLBACK_URL $OPENID_CALLBACK_URL
-ENV VITE_AUTH0_AUDIENCE $OPENID_AUDIENCE
-
-
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION} AS build
 WORKDIR /src
-
-RUN apk add --update npm make
-
 
 # Download dependencies as a separate step to take advantage of Docker's caching.
 # Leverage a cache mount to /go/pkg/mod/ to speed up subsequent builds.
@@ -39,15 +24,9 @@ RUN --mount=type=cache,target=/go/pkg/mod/ \
 ARG TARGETARCH
 
 
-COPY ./controller/frontend/package.json ./controller/frontend/package-lock.json* ./
-RUN npm ci && npm cache clean --force
 
 COPY ./ ./
 
-WORKDIR /src/controller/frontend
-RUN npm run build
-
-WORKDIR /src
 # Build the application.
 # Leverage a cache mount to /go/pkg/mod/ to speed up subsequent builds.
 # Leverage a bind mount to the current directory to avoid having to copy the

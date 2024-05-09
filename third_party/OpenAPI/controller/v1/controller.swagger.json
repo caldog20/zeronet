@@ -1,0 +1,204 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "controller/v1/controller.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "ControllerService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/api/v1/delete": {
+      "post": {
+        "operationId": "ControllerService_DeletePeer",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoDeletePeerResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/protoDeletePeerRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ControllerService"
+        ]
+      }
+    },
+    "/api/v1/peers": {
+      "get": {
+        "operationId": "ControllerService_GetPeers",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoGetPeersResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ControllerService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "protoDeletePeerRequest": {
+      "type": "object",
+      "properties": {
+        "peerId": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "protoDeletePeerResponse": {
+      "type": "object"
+    },
+    "protoGetPKCEAuthInfoResponse": {
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "type": "string"
+        },
+        "authEndpoint": {
+          "type": "string"
+        },
+        "tokenEndpoint": {
+          "type": "string"
+        },
+        "redirectUri": {
+          "type": "string"
+        },
+        "audience": {
+          "type": "string"
+        }
+      }
+    },
+    "protoGetPeersResponse": {
+      "type": "object",
+      "properties": {
+        "peers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protoPeer"
+          }
+        }
+      }
+    },
+    "protoLoginPeerResponse": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "$ref": "#/definitions/protoPeerConfig"
+        }
+      }
+    },
+    "protoPeer": {
+      "type": "object",
+      "properties": {
+        "machineId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "publicKey": {
+          "type": "string"
+        },
+        "hostname": {
+          "type": "string"
+        },
+        "ip": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "user": {
+          "type": "string"
+        },
+        "loggedIn": {
+          "type": "boolean"
+        }
+      }
+    },
+    "protoPeerConfig": {
+      "type": "object",
+      "properties": {
+        "peerId": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "tunnelIp": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        }
+      }
+    },
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    }
+  }
+}

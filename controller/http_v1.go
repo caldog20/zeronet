@@ -3,12 +3,10 @@ package controller
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/caldog20/zeronet/controller/auth"
-	"github.com/caldog20/zeronet/controller/frontend"
 )
 
 type HTTPServer struct {
@@ -37,8 +35,8 @@ func (s *HTTPServer) Middleware(next http.Handler) http.Handler {
 		}
 
 		token := header[1]
-		fmt.Printf("TOKEN: %s\n", token)
-		err := s.tokenValidator.ValidateAccessToken(token)
+		// fmt.Printf("TOKEN: %s\n", token)
+		_, err := s.tokenValidator.ValidateAccessToken(token)
 		if err != nil {
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte("Invalid Token"))
@@ -56,8 +54,6 @@ func Cors(handler http.Handler) http.Handler {
 }
 
 func (s *HTTPServer) Serve(addr string) error {
-	s.mux.Handle("/", frontend.SvelteKitHandler("/"))
-
 	s.mux.Handle("GET /api/peers", s.Middleware(http.HandlerFunc(s.GetPeers)))
 
 	s.server = &http.Server{Addr: addr, Handler: Cors(s.mux)}

@@ -8,11 +8,10 @@ BIN_DIR ?= bin
 PROTO_SRCS += $(wildcard proto/controller/v1/*.proto)
 
 PROTO_OUTPUT += proto/gen/controller/v1/controller.pb.go
+PROTO_OUTPUT += proto/gen/controller/v1/controller.pb.gw.go
 PROTO_OUTPUT += proto/gen/controller/v1/controller_grpc.pb.go
-# PROTO_OUTPUT += proto/gen/controller/v1/peer.pb.go
-# PROTO_OUTPUT += proto/gen/controller/v1/gateway.pb.go
-# PROTO_OUTPUT += proto/gen/controller/v1/gateway.pb.gw.go
-# PROTO_OUTPUT += proto/gen/controller/v1/gateway_grpc.pb.go
+PROTO_OUTPUT += proto/gen/controller/v1/peer.pb.go
+PROTO_OUTPUT += proto/gen/controller/v1/auth.pb.go
 
 all: controller
 

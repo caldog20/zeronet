@@ -2,6 +2,7 @@ package controller
 
 import (
 	"errors"
+	"fmt"
 	"net/netip"
 	"sync"
 	"time"
@@ -65,7 +66,33 @@ func (c *Controller) LogoutPeer(peer *types.Peer) error {
 	return nil
 }
 
-func (c *Controller) RegisterPeer(req *ctrlv1.LoginPeerRequest) (*types.Peer, error) {
+func (c *Controller) DeletePeer(peerID uint32) error {
+	peer := c.db.GetPeerbyID(peerID)
+	if peer == nil {
+		return errors.New("peer doesn't exist")
+	}
+
+	if peer.LoggedIn {
+		err := c.LogoutPeer(peer)
+		if err != nil {
+			return err
+		}
+	}
+
+	err := c.db.DeletePeer(peer)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(err)
+
+	return nil
+}
+
+func (c *Controller) RegisterPeer(
+	req *ctrlv1.LoginPeerRequest,
+	userID string,
+) (*types.Peer, error) {
 	ip, err := c.db.AllocatePeerIP(c.prefix)
 	if err != nil {
 		return nil, err
@@ -85,6 +112,7 @@ func (c *Controller) RegisterPeer(req *ctrlv1.LoginPeerRequest) (*types.Peer, er
 		Endpoint:       req.GetEndpoint(),
 		LoggedIn:       false,
 		LastAuth:       time.Now(),
+		User:           userID,
 	}
 
 	err = c.db.CreatePeer(newPeer)

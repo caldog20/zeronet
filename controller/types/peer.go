@@ -8,15 +8,15 @@ import (
 
 type Peer struct {
 	MachineID      string `json:"machine_id" gorm:"unique,not null"`
-	ID             uint32 `json:"-"          gorm:"primaryKey,autoIncrement"`
+	ID             uint32 `json:"id"         gorm:"primaryKey,autoIncrement"`
 	NoisePublicKey string `json:"-"          gorm:"uniqueIndex,not null"`
 	IP             string `json:"ip"         gorm:"uniqueIndex"`
 	Prefix         string `json:"prefix"     gorm:"not null"`
-	Endpoint       string `json:"-"`
-	Hostname       string
+	Endpoint       string `json:"endpoint"`
+	Hostname       string `json:"hostname"`
 
-	LoggedIn bool
-	User     string
+	LoggedIn bool   `json:"logged_in"`
+	User     string `json:"user"`
 	// JWT      string
 
 	LastLogin time.Time
@@ -53,6 +53,8 @@ func (p *Peer) Proto() *ctrlv1.Peer {
 		Ip:        p.IP,
 		Endpoint:  p.Endpoint,
 		Prefix:    p.Prefix,
+		User:      p.User,
+		LoggedIn:  p.LoggedIn,
 	}
 }
 

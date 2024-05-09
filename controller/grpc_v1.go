@@ -2,9 +2,11 @@ package controller
 
 import (
 	"context"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/caldog20/zeronet/controller/auth"
@@ -59,7 +61,7 @@ func (s *GRPCServer) LoginPeer(
 			log.Debugf("peer %s auth is expired", peer.MachineID)
 
 			// Validate Access Token for reauthenticating peer
-			if err := s.validateAccessToken(req.GetAccessToken()); err != nil {
+			if _, err = s.validateAccessToken(req.GetAccessToken()); err != nil {
 				log.Debugf("peer %s access token is invalid", peer.MachineID)
 				if peer.IsLoggedIn() {
 					s.controller.LogoutPeer(peer)
@@ -82,12 +84,13 @@ func (s *GRPCServer) LoginPeer(
 	} else {
 		// Peer was not found, try to register if access token is present/valid
 		log.Debugf("peer registration processing")
-		if err := s.validateAccessToken(req.GetAccessToken()); err != nil {
+		userId, err := s.validateAccessToken(req.GetAccessToken())
+		if err != nil {
 			log.Debugf("peer registration failed. invalid access token")
 			return nil, err
 		}
 		// Access token is valid, register peer
-		peer, err = s.controller.RegisterPeer(req)
+		peer, err = s.controller.RegisterPeer(req, userId)
 		if err != nil {
 			log.Debugf("peer registration failed: %s", err)
 			return nil, status.Error(codes.Internal, "error registering peer")
@@ -97,18 +100,77 @@ func (s *GRPCServer) LoginPeer(
 	return &ctrlv1.LoginPeerResponse{Config: peer.ProtoConfig()}, nil
 }
 
-func (s *GRPCServer) validateAccessToken(token string) error {
+func (s *GRPCServer) validateAccessToken(token string) (string, error) {
 	// errMsg := "peer registration failed, access token is invalid"
 	// if reauth {
 	// 	errMsg = "peer reauth failed, access token is invalid"
 	// }
 
-	err := s.tokenValidator.ValidateAccessToken(token)
+	userId, err := s.tokenValidator.ValidateAccessToken(token)
 	if err != nil {
-		return status.Error(
+		return "", status.Error(
 			codes.Unauthenticated,
 			err.Error(),
 		)
 	}
-	return nil
+	return userId, nil
+}
+
+func (s *GRPCServer) GetPeers(
+	ctx context.Context,
+	req *ctrlv1.GetPeersRequest,
+) (*ctrlv1.GetPeersResponse, error) {
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Errorf(codes.Unauthenticated, "metadata missing from request context")
+	}
+
+	values := md["authorization"]
+	token := strings.Split(values[0], "Bearer ")
+	_, err := s.validateAccessToken(token[1])
+	if err != nil {
+		return nil, err
+	}
+
+	peers, err := s.controller.db.GetPeers()
+	if err != nil {
+		return nil, status.Error(codes.Internal, "error getting peers from database")
+	}
+
+	var p []*ctrlv1.Peer
+	for _, peer := range peers {
+		p = append(p, peer.Proto())
+	}
+
+	return &ctrlv1.GetPeersResponse{Peers: p}, nil
+}
+
+func (s *GRPCServer) DeletePeer(
+	ctx context.Context,
+	req *ctrlv1.DeletePeerRequest,
+) (*ctrlv1.DeletePeerResponse, error) {
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Errorf(codes.Unauthenticated, "metadata missing from request context")
+	}
+
+	values := md["authorization"]
+	token := strings.Split(values[0], "Bearer ")
+	_, err := s.validateAccessToken(token[1])
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.controller.DeletePeer(req.GetPeerId())
+	if err != nil {
+		// TODO: Fix this crap
+		if err.Error() == "peer doesn't exist" {
+			return nil, status.Error(codes.NotFound, "peer not found")
+		}
+		return nil, status.Error(codes.Internal, "error deleting peer")
+	}
+
+	return &ctrlv1.DeletePeerResponse{}, nil
 }

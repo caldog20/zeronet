@@ -3,6 +3,7 @@ syntax = "proto3";
 package proto;
 option go_package = "github.com/caldog20/zeronet/proto/gen;controllerv1";
 
+import "google/api/annotations.proto";
 import "controller/v1/peer.proto";
 import "controller/v1/auth.proto";
 
@@ -10,6 +11,18 @@ service ControllerService {
   rpc LoginPeer(LoginPeerRequest) returns (LoginPeerResponse) {}
   rpc GetPKCEAuthInfo(GetPKCEAuthInfoRequest)
       returns (GetPKCEAuthInfoResponse) {}
+  rpc GetPeers(GetPeersRequest) returns (GetPeersResponse) {
+    option (google.api.http) = {
+      get : "/api/v1/peers",
+      // body : "*"
+    };
+  }
+  rpc DeletePeer(DeletePeerRequest) returns (DeletePeerResponse) {
+    option (google.api.http) = {
+      post : "/api/v1/delete",
+      body : "*"
+    };
+  }
 }
 
 message LoginPeerRequest {
@@ -21,3 +34,13 @@ message LoginPeerRequest {
 }
 
 message LoginPeerResponse { PeerConfig config = 2; }
+
+// TODO: Move to different proto file after testing
+
+message GetPeersRequest {}
+
+message GetPeersResponse { repeated Peer peers = 1; }
+
+message DeletePeerRequest { uint32 peer_id = 1; }
+
+message DeletePeerResponse {}

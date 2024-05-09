@@ -25,10 +25,12 @@ func (s *Store) GetPeers() ([]types.Peer, error) {
 
 func (s *Store) GetPeerbyID(id uint32) *types.Peer {
 	var peer types.Peer
-	err := s.db.First(&types.Peer{}, id).Error
+
+	err := s.db.First(&peer, id).Error
 	if err != nil {
 		return nil
 	}
+
 	return &peer
 }
 
@@ -38,4 +40,8 @@ func (s *Store) UpdatePeer(peer *types.Peer) error {
 
 func (s *Store) CreatePeer(peer *types.Peer) error {
 	return s.db.Create(peer).Error
+}
+
+func (s *Store) DeletePeer(peer *types.Peer) error {
+	return s.db.Delete(peer).Error
 }

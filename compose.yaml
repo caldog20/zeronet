@@ -5,12 +5,6 @@ services:
       context: .
       dockerfile: controller/Dockerfile
       target: final
-      args:
-        OPENID_DOMAIN:
-        OPENID_CLIENT_ID:
-        OPENID_CALLBACK_URL:
-        OPENID_AUDIENCE:
-
     ports:
       - 8080:8080/tcp
       - 50000:50000/tcp
