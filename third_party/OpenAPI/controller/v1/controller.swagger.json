@@ -16,7 +16,29 @@
     "application/json"
   ],
   "paths": {
-    "/api/v1/delete": {
+    "/api/v1/peers": {
+      "get": {
+        "operationId": "ControllerService_GetPeers",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/protoGetPeersResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "ControllerService"
+        ]
+      }
+    },
+    "/api/v1/peers/delete": {
       "post": {
         "operationId": "ControllerService_DeletePeer",
         "responses": {
@@ -43,28 +65,6 @@
             }
           }
         ],
-        "tags": [
-          "ControllerService"
-        ]
-      }
-    },
-    "/api/v1/peers": {
-      "get": {
-        "operationId": "ControllerService_GetPeers",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/protoGetPeersResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
         "tags": [
           "ControllerService"
         ]

@@ -2,11 +2,9 @@ package controller
 
 import (
 	"context"
-	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/caldog20/zeronet/controller/auth"
@@ -121,14 +119,11 @@ func (s *GRPCServer) GetPeers(
 	req *ctrlv1.GetPeersRequest,
 ) (*ctrlv1.GetPeersResponse, error) {
 
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, status.Errorf(codes.Unauthenticated, "metadata missing from request context")
+	token, err := extractTokenMetadata(ctx)
+	if err != nil {
+		return nil, err
 	}
-
-	values := md["authorization"]
-	token := strings.Split(values[0], "Bearer ")
-	_, err := s.validateAccessToken(token[1])
+	_, err = s.validateAccessToken(token)
 	if err != nil {
 		return nil, err
 	}
@@ -151,14 +146,12 @@ func (s *GRPCServer) DeletePeer(
 	req *ctrlv1.DeletePeerRequest,
 ) (*ctrlv1.DeletePeerResponse, error) {
 
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, status.Errorf(codes.Unauthenticated, "metadata missing from request context")
+	token, err := extractTokenMetadata(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	values := md["authorization"]
-	token := strings.Split(values[0], "Bearer ")
-	_, err := s.validateAccessToken(token[1])
+	_, err = s.validateAccessToken(token)
 	if err != nil {
 		return nil, err
 	}

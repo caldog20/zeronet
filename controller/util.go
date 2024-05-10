@@ -1,6 +1,14 @@
 package controller
 
-import "regexp"
+import (
+	"context"
+	"regexp"
+	"strings"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+)
 
 const MachineIDLen = 64
 
@@ -16,4 +24,20 @@ func validateMachineID(id string) bool {
 	}
 
 	return true
+}
+
+func extractTokenMetadata(ctx context.Context) (string, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return "", status.Error(codes.Unauthenticated, "metadata missing from request context")
+	}
+
+	values := md["authorization"]
+	token := strings.Split(values[0], "Bearer ")
+
+	if len(token) < 2 {
+		return "", status.Error(codes.Unauthenticated, "invalid or missing access token")
+	}
+
+	return token[1], nil
 }

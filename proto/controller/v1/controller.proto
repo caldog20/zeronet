@@ -19,7 +19,7 @@ service ControllerService {
   }
   rpc DeletePeer(DeletePeerRequest) returns (DeletePeerResponse) {
     option (google.api.http) = {
-      post : "/api/v1/delete",
+      post : "/api/v1/peers/delete",
       body : "*"
     };
   }
