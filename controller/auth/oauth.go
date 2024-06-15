@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/MicahParks/keyfunc/v3"
@@ -15,6 +16,24 @@ import (
 
 	ctrlv1 "github.com/caldog20/zeronet/proto/gen/controller/v1"
 )
+
+type UserInfo struct {
+	Name       string `json:"name"`
+	GivenName  string `json:"given_name"`
+	FamilyName string `json:"family_name"`
+	Email      string `json:"email"`
+	Nickname   string `json:"nickname"`
+	UpdatedAt time.Time `json:"-"`
+}
+
+func (u *UserInfo) NeedsRefresh() bool {
+	now := time.Now()
+	duration := now.Sub(u.UpdatedAt)
+
+	hours := duration.Hours()
+
+	return hours >= 1
+}
 
 type OpenIDConfig struct {
 	Issuer           string   `json:"issuer"`
@@ -32,6 +51,7 @@ type TokenValidator struct {
 	clientID    string
 	audience    string
 	redirectUri string
+	userCache	sync.Map
 }
 
 func NewTokenValidator(ctx context.Context) (*TokenValidator, error) {
@@ -77,38 +97,42 @@ func getOpenIDConfiguration(url string) (*OpenIDConfig, error) {
 	return config, nil
 }
 
-func (t *TokenValidator) GetUserInfo(token *jwt.Token) (string, error) {
+func (t *TokenValidator) GetUserInfo(token *jwt.Token) (*UserInfo, error) {
 	client := &http.Client{Timeout: 5 * time.Second}
 	req, _ := http.NewRequest("GET", t.config.UserInfoEndpoint, nil)
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token.Raw))
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return &UserInfo{}, err
 	}
 
-	info := struct {
-		Name       string `json:"name"`
-		GivenName  string `json:"given_name"`
-		FamilyName string `json:"family_name"`
-		Email      string `json:"email"`
-		Nickname   string `json:"nickname"`
-	}{}
+	info := &UserInfo{}
 
 	defer resp.Body.Close()
 
-	err = json.NewDecoder(resp.Body).Decode(&info)
+	err = json.NewDecoder(resp.Body).Decode(info)
 
-	return info.Name, nil
+	return info, nil
 }
 
-// var oauthConfig = &oauth2.Config{
-// 	ClientID: ClientID,
-// 	Endpoint: oauth2.Endpoint{
-// 		AuthURL:  AuthURL,
-// 		TokenURL: TokenURL,
-// 	},
-// 	RedirectURL: RedirectURI,
-// }
+func (t *TokenValidator) GetUser(token *jwt.Token) (string, error) {
+	sub, err := token.Claims.GetSubject()
+	if err != nil {
+		return "", err
+	}
+	
+	// Check cache to see if userinfo was already fetched
+	userInfo, ok := t.userCache.Load(sub)
+	// Userinfo doesn't exist, call userinfo endpoint
+	if !ok {
+		userInfo, err = t.GetUserInfo(token)
+		if err != nil {
+			return "", err
+		}
+	}
+		return userInfo.(*UserInfo).Name, nil
+
+}
 
 func (t *TokenValidator) ValidateAccessToken(token string) (string, error) {
 	tok, err := jwt.Parse(token, t.kf.Keyfunc)
@@ -122,20 +146,26 @@ func (t *TokenValidator) ValidateAccessToken(token string) (string, error) {
 		return "", errors.New("access token is invalid")
 	}
 
-	username, err := t.GetUserInfo(tok)
-	if err != nil {
-		return "", nil
-	}
-
-	aud, err := tok.Claims.GetAudience()
-	if err != nil {
+	if err := validateAudience(t.audience, tok); err != nil {
 		return "", err
 	}
 
-	if !slices.Contains(aud, t.audience) {
-		return "", errors.New("access token audience invalid")
-	}
+	username, err := t.GetUser(tok)
+
 	return username, nil
+}
+
+func validateAudience(audience string, token *jwt.Token) error {
+	audiences, err := token.Claims.GetAudience()
+	if err != nil {
+		return err
+	}
+
+	if !slices.Contains(audiences, audience) {
+		return errors.New("invalid audience")
+	}
+
+	return nil
 }
 
 func (t *TokenValidator) GetPKCEAuthInfo() *ctrlv1.GetPKCEAuthInfoResponse {

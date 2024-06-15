@@ -33,9 +33,10 @@ var (
 	autoCert      bool
 	grpcPort      uint16
 	httpPort      uint16
-	discoveryPort uint16
+	// discoveryPort uint16
 	debug         bool
 
+	// TODO: Refactor: Many components should have the basic setup done in separate functions part of their type
 	rootCmd = &cobra.Command{
 		Use:   "controller",
 		Short: "ZeroNet Controller",
@@ -100,6 +101,7 @@ var (
 			// })
 
 			mux := runtime.NewServeMux()
+
 			opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 			err = controllerv1.RegisterControllerServiceHandlerFromEndpoint(
 				egCtx,
@@ -108,6 +110,8 @@ var (
 				opts,
 			)
 
+			// This is faster, but disables alot of grpc features including interceptors
+			// controllerv1.RegisterControllerServiceHandlerServer(egCtx, mux, grpcServer)
 			if err != nil {
 				log.Fatal(err)
 			}

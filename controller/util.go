@@ -33,6 +33,9 @@ func extractTokenMetadata(ctx context.Context) (string, error) {
 	}
 
 	values := md["authorization"]
+	if len(values) == 0 {
+		return "", status.Error(codes.Unauthenticated, "invalid or missing access token")
+	}
 	token := strings.Split(values[0], "Bearer ")
 
 	if len(token) < 2 {

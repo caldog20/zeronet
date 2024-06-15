@@ -45,14 +45,14 @@ func (s *GRPCServer) LoginPeer(
 	peer = s.controller.db.GetPeerByMachineID(req.GetMachineId())
 	if peer != nil {
 		// Peer already registered, validate and log in
-		if peer.MachineID != req.GetMachineId() {
-			log.Debugf(
-				"mismatched machine ID for peer. got: %s - expected: %s",
-				req.GetMachineId(),
-				peer.MachineID,
-			)
-			return nil, status.Error(codes.InvalidArgument, "machine ID mismatch for peer")
-		}
+		// if peer.MachineID != req.GetMachineId() {
+		// 	log.Debugf(
+		// 		"mismatched machine ID for peer. got: %s - expected: %s",
+		// 		req.GetMachineId(),
+		// 		peer.MachineID,
+		// 	)
+		// 	return nil, status.Error(codes.InvalidArgument, "machine ID mismatch for peer")
+		// }
 
 		// Check peer auth hasn't expired
 		if peer.IsAuthExpired() {
@@ -158,7 +158,7 @@ func (s *GRPCServer) DeletePeer(
 
 	err = s.controller.DeletePeer(req.GetPeerId())
 	if err != nil {
-		// TODO: Fix this crap
+		// TODO: Fix this
 		if err.Error() == "peer doesn't exist" {
 			return nil, status.Error(codes.NotFound, "peer not found")
 		}

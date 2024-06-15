@@ -37,7 +37,7 @@ func (c *Controller) ProcessPeerLogin(peer *types.Peer, req *ctrlv1.LoginPeerReq
 	peer.NoisePublicKey = req.GetPublicKey() // TODO: Validate public key
 	peer.Hostname = req.GetHostname()
 	peer.Endpoint = req.GetEndpoint()
-	peer.LoggedIn = true
+	peer.Connected = true
 
 	// Update peer in database
 	err := c.db.UpdatePeer(peer)
@@ -53,13 +53,13 @@ func (c *Controller) ProcessPeerLogin(peer *types.Peer, req *ctrlv1.LoginPeerReq
 }
 
 func (c *Controller) LogoutPeer(peer *types.Peer) error {
-	peer.LoggedIn = false
+	peer.Connected = false
 	c.currentPeers.Delete(peer.ID)
 
 	// Handle per logout event here
 	// go c.PeerLogoutEvent(peer.Copy())
 
-	err := c.db.UpdatePeer(&types.Peer{ID: peer.ID, LoggedIn: false})
+	err := c.db.UpdatePeer(&types.Peer{ID: peer.ID, Connected: false})
 	if err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func (c *Controller) DeletePeer(peerID uint32) error {
 		return errors.New("peer doesn't exist")
 	}
 
-	if peer.LoggedIn {
+	if peer.Connected {
 		err := c.LogoutPeer(peer)
 		if err != nil {
 			return err
@@ -110,7 +110,7 @@ func (c *Controller) RegisterPeer(
 		Prefix:         c.prefix.String(),
 		IP:             ip,
 		Endpoint:       req.GetEndpoint(),
-		LoggedIn:       false,
+		Connected:      false,
 		LastAuth:       time.Now(),
 		User:           userID,
 	}

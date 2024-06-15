@@ -9,8 +9,10 @@ import "controller/v1/auth.proto";
 
 service ControllerService {
   rpc LoginPeer(LoginPeerRequest) returns (LoginPeerResponse) {}
+  
   rpc GetPKCEAuthInfo(GetPKCEAuthInfoRequest)
       returns (GetPKCEAuthInfoResponse) {}
+
   rpc GetPeers(GetPeersRequest) returns (GetPeersResponse) {
     option (google.api.http) = {
       get : "/api/v1/peers",
@@ -19,8 +21,7 @@ service ControllerService {
   }
   rpc DeletePeer(DeletePeerRequest) returns (DeletePeerResponse) {
     option (google.api.http) = {
-      post : "/api/v1/peers/delete",
-      body : "*"
+      delete : "/api/v1/peers/{peer_id}"
     };
   }
 }
@@ -33,7 +34,7 @@ message LoginPeerRequest {
   string access_token = 5;
 }
 
-message LoginPeerResponse { PeerConfig config = 2; }
+message LoginPeerResponse { PeerConfig config = 1; }
 
 // TODO: Move to different proto file after testing
 

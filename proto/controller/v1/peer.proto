@@ -12,7 +12,7 @@ message Peer {
   string endpoint = 6;
   string prefix = 7;
   string user = 8;
-  bool logged_in = 9;
+  bool connected = 9;
 }
 
 message PeerConfig {

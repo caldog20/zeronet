@@ -7,16 +7,16 @@ import (
 )
 
 type Peer struct {
-	MachineID      string `json:"machine_id" gorm:"unique,not null"`
 	ID             uint32 `json:"id"         gorm:"primaryKey,autoIncrement"`
+	MachineID      string `json:"machine_id" gorm:"unique,not null"`
 	NoisePublicKey string `json:"-"          gorm:"uniqueIndex,not null"`
 	IP             string `json:"ip"         gorm:"uniqueIndex"`
 	Prefix         string `json:"prefix"     gorm:"not null"`
 	Endpoint       string `json:"endpoint"`
 	Hostname       string `json:"hostname"`
 
-	LoggedIn bool   `json:"logged_in"`
-	User     string `json:"user"`
+	Connected bool   `json:"connected"`
+	User      string `json:"user"`
 	// JWT      string
 
 	LastLogin time.Time
@@ -27,14 +27,14 @@ type Peer struct {
 
 func (p *Peer) Copy() *Peer {
 	return &Peer{
-		p.MachineID,
 		p.ID,
+		p.MachineID,
 		p.NoisePublicKey,
 		p.IP,
 		p.Prefix,
 		p.Endpoint,
 		p.Hostname,
-		p.LoggedIn,
+		p.Connected,
 		p.User,
 		// p.JWT,
 		p.LastLogin,
@@ -54,7 +54,7 @@ func (p *Peer) Proto() *ctrlv1.Peer {
 		Endpoint:  p.Endpoint,
 		Prefix:    p.Prefix,
 		User:      p.User,
-		LoggedIn:  p.LoggedIn,
+		Connected:  p.Connected,
 	}
 }
 
@@ -67,7 +67,7 @@ func (p *Peer) ProtoConfig() *ctrlv1.PeerConfig {
 }
 
 func (p *Peer) IsLoggedIn() bool {
-	return p.LoggedIn
+	return p.Connected
 }
 
 // func (p *Peer) ValidateToken(token string) bool {
@@ -93,5 +93,6 @@ func (p *Peer) IsAuthExpired() bool {
 }
 
 func (p *Peer) UpdateAuth() {
+	// Reset last auth to current time
 	p.LastAuth = time.Now()
 }
