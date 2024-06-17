@@ -96,22 +96,6 @@ func (s *GRPCServer) LoginPeer(
 	return &ctrlv1.LoginPeerResponse{Config: peer.ProtoConfig()}, nil
 }
 
-func (s *GRPCServer) validateAccessToken(token string) (string, error) {
-	// errMsg := "peer registration failed, access token is invalid"
-	// if reauth {
-	// 	errMsg = "peer reauth failed, access token is invalid"
-	// }
-
-	userId, err := s.tokenValidator.ValidateAccessToken(token)
-	if err != nil {
-		return "", status.Error(
-			codes.Unauthenticated,
-			err.Error(),
-		)
-	}
-	return userId, nil
-}
-
 func (s *GRPCServer) UpdateStream(req *ctrlv1.UpdateRequest, stream ctrlv1.ControllerService_UpdateStreamServer) error {
 	peer := s.controller.db.GetPeerByMachineID(req.GetMachineId())
 	if peer == nil {
@@ -137,7 +121,7 @@ func (s *GRPCServer) UpdateStream(req *ctrlv1.UpdateRequest, stream ctrlv1.Contr
 
 	pc := s.controller.GetPeerUpdateChannel(peer.ID)
 	s.controller.PeerConnectedEvent(peer.ID)
-	
+
 	defer func() {
 		s.controller.DeletePeerUpdateChannel(peer.ID)
 		s.controller.db.SetPeerConnected(peer, false)
@@ -244,4 +228,15 @@ func (s *GRPCServer) DeletePeer(
 	}
 
 	return &ctrlv1.DeletePeerResponse{}, nil
+}
+
+func (s *GRPCServer) validateAccessToken(token string) (string, error) {
+	userId, err := s.tokenValidator.ValidateAccessToken(token)
+	if err != nil {
+		return "", status.Error(
+			codes.Unauthenticated,
+			err.Error(),
+		)
+	}
+	return userId, nil
 }

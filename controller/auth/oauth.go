@@ -86,11 +86,12 @@ func NewTokenValidator(ctx context.Context) (*TokenValidator, error) {
 // older than duration declared in UserInfo.NeedsRefresh()
 func (t *TokenValidator) userInfoCacheRoutine(ctx context.Context) {
 	go func(ctx context.Context) {
+		timer := time.NewTimer(time.Minute * 5)
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			default:
+			case <-timer.C:
 				t.userCache.Range(func(k,v interface{}) bool {
 					userInfo := v.(*UserInfo)
 					if userInfo.NeedsRefresh() {
@@ -98,7 +99,7 @@ func (t *TokenValidator) userInfoCacheRoutine(ctx context.Context) {
 					}
 					return true
 				})
-				time.Sleep(time.Minute * 5)
+				timer.Reset(time.Minute * 5)
 			}
 		}
 	}(ctx)
