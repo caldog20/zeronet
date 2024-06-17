@@ -57,6 +57,6 @@ clean:
 	rm -rf $(BIN_DIR)
 	rm -rf proto/gen
 	rm -rf store.db
-	rm -rf third_party/*
+	rm -rf third_party/OpenAPI
 
 .PHONY: all controller docker-controller deps frontend buf-lint clean node all

@@ -39,6 +39,7 @@ patches/
 
 # Generated protobuf/grpc stubs
 proto/gen
+third_party/OpenAPI
 
 # Test executables
 cmd/client
