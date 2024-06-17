@@ -23,6 +23,15 @@ func (s *Store) GetPeers() ([]types.Peer, error) {
 
 }
 
+func (s *Store) GetConnectedPeers() ([]types.Peer, error) {
+	var peers []types.Peer
+	err := s.db.Where("connected = ?", true).Find(&peers).Error
+	if err != nil {
+		return nil, err
+	}
+	return peers, nil
+}
+
 func (s *Store) GetPeerbyID(id uint32) *types.Peer {
 	var peer types.Peer
 
@@ -32,6 +41,10 @@ func (s *Store) GetPeerbyID(id uint32) *types.Peer {
 	}
 
 	return &peer
+}
+
+func (s *Store) SetPeerConnected(peer *types.Peer, connected bool) error {
+	return s.db.Model(peer).Update("connected", connected).Error
 }
 
 func (s *Store) UpdatePeer(peer *types.Peer) error {

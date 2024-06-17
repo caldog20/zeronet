@@ -19,6 +19,8 @@ var (
 )
 
 type Claims struct {
+	User string `json:"user"`
+	// MachineID string `json:"machine_id"`
 	jwt.RegisteredClaims
 }
 
@@ -27,8 +29,9 @@ func getExpireDate() *jwt.NumericDate {
 	return jwt.NewNumericDate(time.Now().Add(time.Second * 5))
 }
 
-func GenerateJwtWithClaims() (string, error) {
+func GenerateJwtWithClaims(user string) (string, error) {
 	claims := &Claims{
+		user,
 		jwt.RegisteredClaims{
 			ExpiresAt: getExpireDate(),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -51,7 +54,7 @@ func GenerateJwtWithClaims() (string, error) {
 
 func keyFunc(token *jwt.Token) (interface{}, error) {
 	if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-		return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+		return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 	}
 	return jwtSigningKey, nil
 }

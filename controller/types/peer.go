@@ -15,8 +15,10 @@ type Peer struct {
 	Endpoint       string `json:"endpoint"`
 	Hostname       string `json:"hostname"`
 
+	LoggedIn bool `json:"logged_in"`
 	Connected bool   `json:"connected"`
 	User      string `json:"user"`
+	Disabled bool `json:"disabled"`
 	// JWT      string
 
 	LastLogin time.Time
@@ -35,7 +37,9 @@ func (p *Peer) Copy() *Peer {
 		p.Endpoint,
 		p.Hostname,
 		p.Connected,
+		p.LoggedIn,
 		p.User,
+		p.Disabled,
 		// p.JWT,
 		p.LastLogin,
 		p.LastAuth,
@@ -46,7 +50,7 @@ func (p *Peer) Copy() *Peer {
 
 func (p *Peer) Proto() *ctrlv1.Peer {
 	return &ctrlv1.Peer{
-		MachineId: p.MachineID,
+		// MachineId: p.MachineID,
 		Id:        p.ID,
 		PublicKey: p.NoisePublicKey,
 		Hostname:  p.Hostname,
@@ -67,7 +71,15 @@ func (p *Peer) ProtoConfig() *ctrlv1.PeerConfig {
 }
 
 func (p *Peer) IsLoggedIn() bool {
+	return p.LoggedIn
+}
+
+func (p *Peer) IsConnected() bool {
 	return p.Connected
+}
+
+func (p *Peer) IsDisabled() bool {
+	return p.Disabled
 }
 
 // func (p *Peer) ValidateToken(token string) bool {

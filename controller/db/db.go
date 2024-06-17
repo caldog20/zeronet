@@ -18,7 +18,7 @@ type Store struct {
 
 func New(path string, e *log.Entry) (*Store, error) {
 	gormLogger := gormv2logrus.NewGormlog(gormv2logrus.WithLogrusEntry(e))
-	gormLogger.LogMode(logger.Error)
+	gormLogger.LogMode(logger.Info)
 
 	db, err := gorm.Open(
 		sqlite.Open(fmt.Sprintf("file:%s?cache=shared&_journal_mode=WAL", path)),

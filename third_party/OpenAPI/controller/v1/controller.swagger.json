@@ -38,8 +38,8 @@
         ]
       }
     },
-    "/api/v1/peers/delete": {
-      "post": {
+    "/api/v1/peers/{peerId}": {
+      "delete": {
         "operationId": "ControllerService_DeletePeer",
         "responses": {
           "200": {
@@ -57,12 +57,11 @@
         },
         "parameters": [
           {
-            "name": "body",
-            "in": "body",
+            "name": "peerId",
+            "in": "path",
             "required": true,
-            "schema": {
-              "$ref": "#/definitions/protoDeletePeerRequest"
-            }
+            "type": "integer",
+            "format": "int64"
           }
         ],
         "tags": [
@@ -72,15 +71,6 @@
     }
   },
   "definitions": {
-    "protoDeletePeerRequest": {
-      "type": "object",
-      "properties": {
-        "peerId": {
-          "type": "integer",
-          "format": "int64"
-        }
-      }
-    },
     "protoDeletePeerResponse": {
       "type": "object"
     },
@@ -127,9 +117,6 @@
     "protoPeer": {
       "type": "object",
       "properties": {
-        "machineId": {
-          "type": "string"
-        },
         "id": {
           "type": "integer",
           "format": "int64"
@@ -153,7 +140,8 @@
           "type": "string"
         },
         "connected": {
-          "type": "boolean"
+          "type": "boolean",
+          "title": "string machine_id = 9;"
         }
       }
     },
@@ -171,6 +159,43 @@
           "type": "string"
         }
       }
+    },
+    "protoPeerList": {
+      "type": "object",
+      "properties": {
+        "peers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protoPeer"
+          }
+        },
+        "count": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "protoUpdateResponse": {
+      "type": "object",
+      "properties": {
+        "updateType": {
+          "$ref": "#/definitions/protoUpdateType"
+        },
+        "peerList": {
+          "$ref": "#/definitions/protoPeerList"
+        }
+      }
+    },
+    "protoUpdateType": {
+      "type": "string",
+      "enum": [
+        "INIT",
+        "CONNECT",
+        "DISCONNECT",
+        "PUNCH"
+      ],
+      "default": "INIT"
     },
     "protobufAny": {
       "type": "object",

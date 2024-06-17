@@ -4,19 +4,46 @@ package proto;
 option go_package = "github.com/caldog20/zeronet/proto/gen;controllerv1";
 
 message Peer {
-  string machine_id = 1;
-  uint32 id = 2;
-  string public_key = 3;
-  string hostname = 4;
-  string ip = 5;
-  string endpoint = 6;
-  string prefix = 7;
-  string user = 8;
-  bool connected = 9;
+  uint32 id = 1;
+  string public_key = 2;
+  string hostname = 3;
+  string ip = 4;
+  string endpoint = 5;
+  string prefix = 6;
+  string user = 7;
+  bool connected = 8;
+  // string machine_id = 9;
 }
 
 message PeerConfig {
   uint32 peer_id = 1;
   string tunnel_ip = 2;
   string prefix = 3;
+}
+
+message UpdateRequest { string machine_id = 1; }
+
+enum UpdateType {
+  INIT = 0;
+  CONNECT = 1;
+  DISCONNECT = 2;
+  PUNCH = 3;
+}
+
+message UpdateResponse {
+  UpdateType update_type = 1;
+  PeerList peer_list = 2;
+}
+
+message PunchRequest {
+  uint32 req_peer_id = 1;
+  uint32 dst_peer_id = 2;
+  string endpoint = 3;
+}
+
+message PunchNotification { string endpoint = 1; }
+
+message PeerList {
+  repeated Peer peers = 1;
+  uint32 count = 2;
 }

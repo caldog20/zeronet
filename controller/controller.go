@@ -17,7 +17,8 @@ type Controller struct {
 
 	// Config Related Items
 	prefix       netip.Prefix
-	currentPeers sync.Map
+	// currentPeers sync.Map
+	peerChannels sync.Map
 }
 
 func NewController(
@@ -33,11 +34,16 @@ func (c *Controller) ProcessPeerLogin(peer *types.Peer, req *ctrlv1.LoginPeerReq
 	// 	return nil, nil
 	// }
 
+	if peer.IsDisabled() {
+		return errors.New("disabled peer cannot log in")
+	}
+
 	peer.LastLogin = time.Now()
 	peer.NoisePublicKey = req.GetPublicKey() // TODO: Validate public key
 	peer.Hostname = req.GetHostname()
 	peer.Endpoint = req.GetEndpoint()
-	peer.Connected = true
+	peer.Connected = false
+	// peer.LoggedIn = true
 
 	// Update peer in database
 	err := c.db.UpdatePeer(peer)
@@ -45,21 +51,27 @@ func (c *Controller) ProcessPeerLogin(peer *types.Peer, req *ctrlv1.LoginPeerReq
 		return err
 	}
 	// Add to map of current peers logged in
-	c.currentPeers.Store(peer.ID, true)
+	// c.currentPeers.Store(peer.ID, true)
 
 	// Handle peer login event here
 	//go c.PeerLoginEvent(peer.Copy())
 	return nil
 }
 
+// func (c *Controller) DisablePeer(peer *types.Peer) error {
+// 
+// }
+
 func (c *Controller) LogoutPeer(peer *types.Peer) error {
 	peer.Connected = false
-	c.currentPeers.Delete(peer.ID)
+	// peer.LoggedIn = false
+	// c.currentPeers.Delete(peer.ID)
+	c.DeletePeerUpdateChannel(peer.ID)
 
 	// Handle per logout event here
 	// go c.PeerLogoutEvent(peer.Copy())
 
-	err := c.db.UpdatePeer(&types.Peer{ID: peer.ID, Connected: false})
+	err := c.db.SetPeerConnected(peer, false)
 	if err != nil {
 		return err
 	}
@@ -111,7 +123,9 @@ func (c *Controller) RegisterPeer(
 		IP:             ip,
 		Endpoint:       req.GetEndpoint(),
 		Connected:      false,
+		LoggedIn:       true,
 		LastAuth:       time.Now(),
+		LastLogin: 		time.Now(),
 		User:           userID,
 	}
 

@@ -45,5 +45,6 @@ cmd/client
 cmd/blah
 cmd/testing
 cmd/wintun-test
+cmd/svc
 **/*.env
 TODO.md

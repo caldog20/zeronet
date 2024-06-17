@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	log "github.com/sirupsen/logrus"
@@ -93,13 +94,6 @@ var (
 				return server.Serve(conn)
 			})
 
-			// HTTP Server
-			// httpServer := controller.NewHTTPServer(ctrl, tokenValidator)
-			// eg.Go(func() error {
-			// 	log.Printf("starting http server on port: %d", httpPort)
-			// 	return httpServer.Serve(fmt.Sprintf(":%d", httpPort))
-			// })
-
 			mux := runtime.NewServeMux()
 
 			opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
@@ -136,9 +130,8 @@ var (
 			// Cleanup
 			eg.Go(func() error {
 				<-egCtx.Done()
-				server.GracefulStop()
-				gwServer.Shutdown(context.Background())
-				// httpServer.Close(context.Background())
+				StopGRPCServer(server)
+				StopHTTPServer(gwServer)
 				return err
 			})
 
@@ -149,6 +142,31 @@ var (
 		},
 	}
 )
+
+func StopHTTPServer(s *http.Server) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 10)
+	defer cancel()
+	err := s.Shutdown(ctx)
+	if err == context.DeadlineExceeded {
+		s.Close()
+	}
+}
+
+func StopGRPCServer(s *grpc.Server) {
+	stopped := make(chan struct{})
+	go func() {
+		s.GracefulStop()
+		close(stopped)
+	}()
+
+	t := time.NewTimer(10 * time.Second)
+	select {
+	case <-t.C:
+		s.Stop()
+	case <-stopped:
+		t.Stop()
+	}
+}
 
 func getOpenAPIHandler() http.Handler {
 	return http.FileServer(http.FS(third_party.OpenAPI))

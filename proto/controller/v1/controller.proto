@@ -16,7 +16,6 @@ service ControllerService {
   rpc GetPeers(GetPeersRequest) returns (GetPeersResponse) {
     option (google.api.http) = {
       get : "/api/v1/peers",
-      // body : "*"
     };
   }
   rpc DeletePeer(DeletePeerRequest) returns (DeletePeerResponse) {
@@ -24,6 +23,8 @@ service ControllerService {
       delete : "/api/v1/peers/{peer_id}"
     };
   }
+
+  rpc UpdateStream(UpdateRequest) returns (stream UpdateResponse) {}
 }
 
 message LoginPeerRequest {

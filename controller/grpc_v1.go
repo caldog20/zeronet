@@ -45,36 +45,34 @@ func (s *GRPCServer) LoginPeer(
 	peer = s.controller.db.GetPeerByMachineID(req.GetMachineId())
 	if peer != nil {
 		// Peer already registered, validate and log in
-		// if peer.MachineID != req.GetMachineId() {
-		// 	log.Debugf(
-		// 		"mismatched machine ID for peer. got: %s - expected: %s",
-		// 		req.GetMachineId(),
-		// 		peer.MachineID,
-		// 	)
-		// 	return nil, status.Error(codes.InvalidArgument, "machine ID mismatch for peer")
-		// }
 
 		// Check peer auth hasn't expired
 		if peer.IsAuthExpired() {
 			log.Debugf("peer %s auth is expired", peer.MachineID)
 
 			// Validate Access Token for reauthenticating peer
-			if _, err = s.validateAccessToken(req.GetAccessToken()); err != nil {
+			user, err := s.validateAccessToken(req.GetAccessToken());
+			if err != nil {
 				log.Debugf("peer %s access token is invalid", peer.MachineID)
 				if peer.IsLoggedIn() {
 					s.controller.LogoutPeer(peer)
 				}
 				return nil, err
 			}
+			// Ensure token is from user peer belongs to
+			if peer.User != user {
+				return nil, status.Error(codes.PermissionDenied, "cannot login a peer that belongs to another user - delete the peer and re-register")
+			}
+
 
 			// Access Token was validated, update peer LastAuth now before Login attempt
-			log.Debugf("peer %s reauth successful", peer.MachineID)
 			peer.UpdateAuth()
+			log.Debugf("peer %s reauth successful", peer.MachineID)
 		}
 
 		// Process peer login
 		log.Debugf("peer %s login processing", peer.MachineID)
-		err := s.controller.ProcessPeerLogin(peer, req)
+		err = s.controller.ProcessPeerLogin(peer, req)
 		if err != nil {
 			log.Debugf("peer %s login failed: %s", peer.MachineID, err)
 			return nil, status.Error(codes.Internal, err.Error())
@@ -114,6 +112,86 @@ func (s *GRPCServer) validateAccessToken(token string) (string, error) {
 	return userId, nil
 }
 
+func (s *GRPCServer) UpdateStream(req *ctrlv1.UpdateRequest, stream ctrlv1.ControllerService_UpdateStreamServer) error {
+	peer := s.controller.db.GetPeerByMachineID(req.GetMachineId())
+	if peer == nil {
+		return status.Error(codes.NotFound, "peer with machine id is not registered")
+	}
+
+	if peer.IsAuthExpired() {
+		return status.Error(codes.Unauthenticated, "peer auth is expired, needs new login")
+	}
+
+	if peer.IsDisabled() {
+		return status.Error(codes.Internal, "peer is currently disabled")
+	}
+
+	// if !peer.IsLoggedIn() {
+	// 	return status.Error(codes.Internal, "peer requires login first")
+	// }
+
+	err := s.controller.db.SetPeerConnected(peer, true)
+	if err != nil {
+		return status.Error(codes.Internal, "error setting peer connected status")
+	}
+
+	pc := s.controller.GetPeerUpdateChannel(peer.ID)
+	s.controller.PeerConnectedEvent(peer.ID)
+	
+	defer func() {
+		s.controller.DeletePeerUpdateChannel(peer.ID)
+		s.controller.db.SetPeerConnected(peer, false)
+		s.controller.PeerDisconnectedEvent(peer.ID)
+	}()
+
+	connectedPeers, err := s.controller.GetConnectedPeers(peer.ID)
+	if err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+
+	initialPeerList := &ctrlv1.UpdateResponse{
+		UpdateType: ctrlv1.UpdateType_INIT,
+		PeerList: connectedPeers,
+	}
+
+	err = stream.Send(initialPeerList)
+	if err != nil {
+		log.Printf("peer %d error sending data on stream", peer.ID)
+		return status.Error(codes.Internal, "error sending data on stream")
+	}
+
+	for {
+		select {
+		case <-stream.Context().Done():
+			// Client disconnected, send event and cleanup
+			log.Printf("peer %d disconnected from update stream", peer.ID)
+			return nil
+		case update, ok := <-pc:
+			if !ok {
+				// channel is closed, exit
+				log.Printf("peer %d channel closed, stopping stream", peer.ID)
+				return status.Error(codes.Aborted, "server closed update stream")
+			}
+			if update != nil {
+				err = stream.Send(update)
+				if err != nil {
+					log.Printf("peer %d error sending data on stream", peer.ID)
+					// return status.Error(codes.Internal, "error sending data on stream")
+				}
+			}
+		}
+	}
+}
+
+
+
+
+
+
+
+////////////////////////////////
+// GRPC Gateway API Methods
+////////////////////////////////
 func (s *GRPCServer) GetPeers(
 	ctx context.Context,
 	req *ctrlv1.GetPeersRequest,

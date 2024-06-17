@@ -69,13 +69,39 @@ func NewTokenValidator(ctx context.Context) (*TokenValidator, error) {
 	audience := os.Getenv("OPENID_AUDIENCE")
 	redirectUri := os.Getenv("OPENID_CALLBACK_URL")
 
-	return &TokenValidator{
+	tv := &TokenValidator{
 		kf:          kf,
 		config:      config,
 		clientID:    clientID,
 		audience:    audience,
 		redirectUri: redirectUri,
-	}, nil
+	}
+
+	go tv.userInfoCacheRoutine(ctx)
+
+	return tv, nil
+}
+
+// Every 5 minutes loop through userinfo cache and clear any data
+// older than duration declared in UserInfo.NeedsRefresh()
+func (t *TokenValidator) userInfoCacheRoutine(ctx context.Context) {
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				t.userCache.Range(func(k,v interface{}) bool {
+					userInfo := v.(*UserInfo)
+					if userInfo.NeedsRefresh() {
+						t.userCache.Delete(k.(string))
+					}
+					return true
+				})
+				time.Sleep(time.Minute * 5)
+			}
+		}
+	}(ctx)
 }
 
 func getOpenIDConfiguration(url string) (*OpenIDConfig, error) {
@@ -111,6 +137,9 @@ func (t *TokenValidator) GetUserInfo(token *jwt.Token) (*UserInfo, error) {
 	defer resp.Body.Close()
 
 	err = json.NewDecoder(resp.Body).Decode(info)
+	if err != nil {
+		return nil, err
+	}
 
 	return info, nil
 }
@@ -124,14 +153,16 @@ func (t *TokenValidator) GetUser(token *jwt.Token) (string, error) {
 	// Check cache to see if userinfo was already fetched
 	userInfo, ok := t.userCache.Load(sub)
 	// Userinfo doesn't exist, call userinfo endpoint
+	// add userinfo to cache on successful call to userinfo endpoint
 	if !ok {
 		userInfo, err = t.GetUserInfo(token)
 		if err != nil {
-			return "", err
+			return "", errors.New("error retrieving user info from idp userinfo endpoint")
 		}
+		t.userCache.Store(sub, userInfo)
 	}
-		return userInfo.(*UserInfo).Name, nil
 
+	return userInfo.(*UserInfo).Email, nil
 }
 
 func (t *TokenValidator) ValidateAccessToken(token string) (string, error) {
@@ -150,9 +181,12 @@ func (t *TokenValidator) ValidateAccessToken(token string) (string, error) {
 		return "", err
 	}
 
-	username, err := t.GetUser(tok)
-
-	return username, nil
+	user, err := t.GetUser(tok)
+	if err != nil {
+		return "", err
+	}
+	
+	return user, nil
 }
 
 func validateAudience(audience string, token *jwt.Token) error {
