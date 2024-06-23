@@ -19,6 +19,9 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
+// TODO: Verify need for mutex for node properties like ip, prefix, id, etc
+// TODO: Handle logged in state and when to refresh
+// TODO: Handle logged in state after running 'down' command
 type Node struct {
 	conn *conn.Conn // This will change to multiple conns in future
 	tun  tun.Tun
@@ -39,6 +42,7 @@ type Node struct {
 		keyPair noise.DHKey
 	}
 
+	// TODO: Verify this bool
 	running    atomic.Bool
 	grpcClient *ControllerClient
 	// Temp
@@ -57,6 +61,8 @@ func NewNode(controller string, port uint16) (*Node, error) {
 	node.maps.id = make(map[uint32]*Peer)
 	node.maps.ip = make(map[netip.Addr]*Peer)
 
+	// TODO: For now, we generate a new key on startup every time
+	// TODO: Key rotation periodically
 	// Try to load key from disk
 	//keypair, err := LoadKeyFromDisk()
 	//if err != nil {
@@ -73,35 +79,27 @@ func NewNode(controller string, port uint16) (*Node, error) {
 	node.noise.keyPair = keypair
 	node.port = port
 
-	id, err := machineid.ProtectedID("Zeronet")
+	node.machineID, err = machineid.ProtectedID("Zeronet")
 	if err != nil {
 		return nil, fmt.Errorf("error generating machine ID: %s", err.Error())
 	}
 
-	node.machineID = id
-
-	client, err := NewControllerClient(controller)
+	node.grpcClient, err = NewControllerClient(controller)
 	if err != nil {
 		return nil, err
 	}
 
-	node.grpcClient = client
-
 	// TODO: Temporary until stun client
-	addr, err := GetPreferredOutboundAddr()
+	node.prefOutboundIP, err = GetPreferredOutboundAddr()
 	if err != nil {
 		log.Println("error getting preferred outbound address: " + err.Error())
 	}
-
-	node.prefOutboundIP = addr
 
 	return node, nil
 }
 
 func (n *Node) Start() error {
 	var err error
-
-	n.runCtx, n.runCancel = context.WithCancel(context.Background())
 
 	n.conn, err = conn.NewConn(n.port)
 	if err != nil {
@@ -111,11 +109,18 @@ func (n *Node) Start() error {
 	// Create local tunnel interface
 	n.tun, err = tun.NewTun()
 	if err != nil {
+		n.conn.Close()
 		return err
 	}
 
+	n.runCtx, n.runCancel = context.WithCancel(context.Background())
+
 	err = n.Run()
 	if err != nil {
+		n.conn.Close()
+		n.tun.Close()
+		// Invalidate context since not running
+		n.runCancel()
 		return err
 	}
 
@@ -132,12 +137,6 @@ func (node *Node) Run() error {
 		return fmt.Errorf("node has not been logged in")
 	}
 
-	//defer func() {
-	//	node.conn.Close()
-	//	node.tun.Close()
-	//	node.conn = nil
-	//	node.tun = nil
-	//}()
 	// Configure tunnel ip/routes
 	err := node.tun.ConfigureIPAddress(node.ip)
 	if err != nil {
@@ -150,10 +149,10 @@ func (node *Node) Run() error {
 	//	return err
 	//}
 
+	node.StartUpdateStream(node.runCtx)
+
 	go node.ReadUDPPackets(node.OnUDPPacket, 0)
 	go node.ReadTunPackets(node.OnTunnelPacket)
-
-	node.StartUpdateStream(node.runCtx)
 
 	//for _, peer := range node.maps.id {
 	//	if peer.running.Load() {
@@ -172,6 +171,7 @@ func (node *Node) Stop() error {
 	node.runCancel()
 	node.conn.Close()
 	node.tun.Close()
+	node.loggedIn.Store(false)
 	//node.grpcClient.Close()
 	//node.grpcClient = nil
 	return nil

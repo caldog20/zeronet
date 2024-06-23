@@ -67,6 +67,9 @@ func (n *Node) Login(ctx context.Context, req *nodev1.LoginRequest) (*nodev1.Log
 		}
 	}
 
+	// TODO: Fix prefix for node address
+	// Change to netip.Addr and have prefix separate
+
 	n.id = resp.Config.PeerId
 	p := strings.Split(resp.Config.Prefix, "/")
 	n.ip = netip.MustParsePrefix(fmt.Sprintf("%s/%s", resp.Config.TunnelIp, p[1]))
