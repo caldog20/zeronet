@@ -5,12 +5,12 @@ name: ZeroNet Windows Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "none" ]
     paths:
       - '**.go'
       - '**.proto'
   pull_request:
-    branches: [ "main" ]
+    branches: [ "none" ]
 
 jobs:
 
