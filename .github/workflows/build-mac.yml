@@ -5,12 +5,12 @@ name: ZeroNet Mac Build
 
 on:
   push:
-    branches: [ "test" ]
+    branches: [ "main" ]
     paths:
       - '**.go'
       - '**.proto'
   pull_request:
-    branches: [ "test" ]
+    branches: [ "main" ]
 
 jobs:
 
@@ -30,8 +30,8 @@ jobs:
       - name: Verify dependencies
         run: go mod verify
 
-      - name: Install golint
-        run: go install golang.org/x/lint/golint@latest
+#      - name: Install golint
+#        run: go install golang.org/x/lint/golint@latest
 
       - name: Install Buf deps
         run: make deps
@@ -39,8 +39,8 @@ jobs:
       - name: Generate proto/grpc
         run: make buf
 
-      - name: Build Controller
-        run: make controller
+      - name: Build Node
+        run: make node
 
       # - name: build node
       #   run: CGO_ENABLED=0 go build -o /dev/null ./cmd/node

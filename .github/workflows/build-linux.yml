@@ -37,8 +37,8 @@ jobs:
       - name: Verify dependencies
         run: go mod verify
 
-      - name: Install golint
-        run: go install golang.org/x/lint/golint@latest
+#      - name: Install golint
+#        run: go install golang.org/x/lint/golint@latest
 
       - name: Install Buf deps
         run: make deps
@@ -49,11 +49,9 @@ jobs:
       - name: Build Controller
         run: make controller
 
-      # - name: build controller
-      #   run: CGO_ENABLED=0 go build -o /dev/null ./cmd/controller
+      - name: Build Node
+        run: make node
 
-      # - name: build node
-      #   run: CGO_ENABLED=0 go build -o /dev/null ./cmd/node
 
       #- name: Test
       # run: go test

@@ -5,12 +5,12 @@ name: ZeroNet Windows Build
 
 on:
   push:
-    branches: [ "none" ]
+    branches: [ "main" ]
     paths:
       - '**.go'
       - '**.proto'
   pull_request:
-    branches: [ "none" ]
+    branches: [ "main" ]
 
 jobs:
 
@@ -39,8 +39,8 @@ jobs:
       - name: Generate proto/grpc
         run: make buf
 
-      - name: build node
-        run: go build -o /dev/null ./cmd/node
+      - name: Build Node
+        run: make node
 
       #- name: Test
       # run: go test
