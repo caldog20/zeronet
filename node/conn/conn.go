@@ -2,7 +2,6 @@ package conn
 
 import (
 	"net"
-	"net/netip"
 	"time"
 )
 
@@ -12,22 +11,6 @@ const (
 
 type Conn struct {
 	uc *net.UDPConn
-}
-
-func GetPreferredOutboundAddr() (netip.Addr, error) {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
-	if err != nil {
-		return netip.Addr{}, err
-	}
-	defer conn.Close()
-
-	localAddr := conn.LocalAddr().(*net.UDPAddr)
-	parsedAddr, err := netip.ParseAddr(localAddr.IP.String())
-	if err != nil {
-		return netip.Addr{}, err
-	}
-
-	return parsedAddr, nil
 }
 
 func (conn *Conn) WriteToUDP(b []byte, addr *net.UDPAddr) (int, error) {

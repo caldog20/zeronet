@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package proto;
+option go_package = "github.com/caldog20/zeronet/proto/gen;nodev1";
+
+import "controller/v1/auth.proto";
+
+service NodeService {
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+  rpc Up(UpRequest) returns (UpResponse) {}
+  rpc Down(DownRequest) returns (DownResponse){}
+}
+
+message LoginRequest {
+  string access_token = 1;
+}
+message LoginResponse {
+  string status = 1;
+  string client_id = 2;
+  string auth_endpoint = 3;
+  string token_endpoint = 4;
+  string redirect_uri = 5;
+  string audience = 6;
+}
+
+message UpRequest {}
+message UpResponse {
+  string status = 1;
+}
+
+message DownRequest {}
+message DownResponse {
+  string status = 1;
+}

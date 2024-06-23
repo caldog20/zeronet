@@ -4,7 +4,8 @@ import (
 	"cmp"
 	"encoding/base64"
 	"errors"
-	"fmt"
+	"log"
+	"net"
 	"net/netip"
 	"os"
 
@@ -18,18 +19,18 @@ type Key struct {
 }
 
 func GenerateNewKeypair() (noise.DHKey, error) {
-	fmt.Println("generating new noise keypair")
+	log.Println("generating new noise keypair")
 	keypair, err := CipherSuite.GenerateKeypair(nil)
 	if err != nil {
 		return noise.DHKey{}, err
 	}
-	err = StoreKeyToDisk(keypair)
-	if err != nil {
-		return noise.DHKey{}, err
-	}
-	fmt.Println("WARNING! Do not share private key")
-	fmt.Println("public key: ", base64.StdEncoding.EncodeToString(keypair.Public))
-	fmt.Println("private key: ", base64.StdEncoding.EncodeToString(keypair.Private))
+	//err = StoreKeyToDisk(keypair)
+	//if err != nil {
+	//	return noise.DHKey{}, err
+	//}
+	//fmt.Println("WARNING! Do not share private key")
+	//fmt.Println("public key: ", base64.StdEncoding.EncodeToString(keypair.Public))
+	//fmt.Println("private key: ", base64.StdEncoding.EncodeToString(keypair.Private))
 	return keypair, nil
 }
 
@@ -112,4 +113,20 @@ func ParseAddrPort(ap string) (netip.AddrPort, error) {
 		return netip.AddrPort{}, err
 	}
 	return endpoint, nil
+}
+
+func GetPreferredOutboundAddr() (netip.Addr, error) {
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		return netip.Addr{}, err
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	parsedAddr, err := netip.ParseAddr(localAddr.IP.String())
+	if err != nil {
+		return netip.Addr{}, err
+	}
+
+	return parsedAddr, nil
 }

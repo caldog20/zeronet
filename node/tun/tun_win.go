@@ -20,7 +20,6 @@ import (
 	"sync/atomic"
 
 	"golang.org/x/sys/windows"
-	"golang.zx2c4.com/wintun"
 	"golang.zx2c4.com/wireguard/windows/tunnel/winipcfg"
 )
 

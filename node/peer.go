@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	proto "github.com/caldog20/overlay/proto/gen/controller/v1"
+	proto "github.com/caldog20/zeronet/proto/gen/controller/v1"
 	"github.com/flynn/noise"
 )
 
@@ -111,7 +111,7 @@ func (node *Node) AddPeer(peerInfo *proto.Peer) (*Peer, error) {
 
 	// TODO Fix this
 	peer.ID = peerInfo.Id
-	peer.IP, err = ParseAddr(peerInfo.TunnelIp)
+	peer.IP, err = ParseAddr(peerInfo.Ip)
 	if err != nil {
 		return nil, err
 	}

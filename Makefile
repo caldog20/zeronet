@@ -6,12 +6,15 @@ rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
 BIN_DIR ?= bin
 
 PROTO_SRCS += $(wildcard proto/controller/v1/*.proto)
+PROTO_SRCS += $(wildcard proto/node/v1/*.proto)
 
 PROTO_OUTPUT += proto/gen/controller/v1/controller.pb.go
 PROTO_OUTPUT += proto/gen/controller/v1/controller.pb.gw.go
 PROTO_OUTPUT += proto/gen/controller/v1/controller_grpc.pb.go
 PROTO_OUTPUT += proto/gen/controller/v1/peer.pb.go
 PROTO_OUTPUT += proto/gen/controller/v1/auth.pb.go
+PROTO_OUTPUT += proto/gen/node/v1/node.pb.go
+PROTO_OUTPUT += proto/gen/node/v1/node_grpc.pb.go
 
 all: controller
 
@@ -56,7 +59,10 @@ deps:
 clean:
 	rm -rf $(BIN_DIR)
 	rm -rf proto/gen
-	rm -rf store.db
+	#rm -rf store.db
 	rm -rf third_party/OpenAPI
 
-.PHONY: all controller docker-controller deps frontend buf-lint clean node all
+cleandb:
+	@rm -rf store.db
+
+.PHONY: all controller docker-controller deps frontend buf-lint clean node all cleandb

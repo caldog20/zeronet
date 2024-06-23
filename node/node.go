@@ -3,24 +3,20 @@ package node
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/netip"
 	"sync"
 	"sync/atomic"
-	"time"
 
+	"github.com/caldog20/machineid"
+	conn "github.com/caldog20/zeronet/node/conn"
+	tun "github.com/caldog20/zeronet/node/tun"
+	"github.com/caldog20/zeronet/pkg/header"
+	nodev1 "github.com/caldog20/zeronet/proto/gen/node/v1"
 	"github.com/flynn/noise"
 	"golang.org/x/net/ipv4"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
-
-	conn "github.com/caldog20/overlay/node/conn"
-	tun "github.com/caldog20/overlay/node/tun"
-	"github.com/caldog20/overlay/pkg/header"
-	controllerv1 "github.com/caldog20/overlay/proto/gen/controller/v1"
 )
 
 type Node struct {
@@ -43,122 +39,121 @@ type Node struct {
 		keyPair noise.DHKey
 	}
 
-	running atomic.Bool
-
-	controller controllerv1.ControllerServiceClient
+	running    atomic.Bool
+	grpcClient *ControllerClient
 	// Temp
 	port                        uint16
-	controllerAddr              string
 	controllerDiscoveryEndpoint *net.UDPAddr
+
+	runCtx    context.Context
+	runCancel context.CancelFunc
+	nodev1.UnimplementedNodeServiceServer
+	machineID string
+	loggedIn  atomic.Bool
 }
 
-func NewNode(port uint16, controller string) (*Node, error) {
+func NewNode(controller string, port uint16) (*Node, error) {
 	node := new(Node)
 	node.maps.id = make(map[uint32]*Peer)
 	node.maps.ip = make(map[netip.Addr]*Peer)
 
 	// Try to load key from disk
-	keypair, err := LoadKeyFromDisk()
+	//keypair, err := LoadKeyFromDisk()
+	//if err != nil {
+	//	keypair, err = GenerateNewKeypair()
+	//	if err != nil {
+	//		log.Println("error storing keypair to disk")
+	//	}
+	//}
+	keypair, err := GenerateNewKeypair()
 	if err != nil {
-		keypair, err = GenerateNewKeypair()
-		if err != nil {
-			log.Fatal(err)
-		}
+		return nil, errors.New("could not generate keypair: " + err.Error())
 	}
 
 	node.noise.keyPair = keypair
+	node.port = port
 
-	if port > 65535 {
-		return nil, errors.New("invalid udp port")
+	id, err := machineid.ProtectedID("Zeronet")
+	if err != nil {
+		return nil, fmt.Errorf("error generating machine ID: %s", err.Error())
 	}
 
-	node.conn, err = conn.NewConn(port)
+	node.machineID = id
+
+	client, err := NewControllerClient(controller)
 	if err != nil {
 		return nil, err
 	}
 
-	// _, p, err := net.SplitHostPort(node.conn.LocalAddr().String())
-	// if err != nil {
-	// 	return nil, err
-	// }
+	node.grpcClient = client
 
-	// finalPort, err := strconv.ParseUint(p, 10, 16)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// node.port = uint16(finalPort)
-
-	node.tun, err = tun.NewTun()
+	// TODO: Temporary until stun client
+	addr, err := GetPreferredOutboundAddr()
 	if err != nil {
-		return nil, err
+		log.Println("error getting preferred outbound address: " + err.Error())
 	}
 
-	// TODO Fix this/move when fixing login/register flow
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*10)
-	gconn, err := grpc.DialContext(
-		ctx,
-		controller,
-		grpc.WithBlock(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		log.Fatal("error connecting to controller grpc: ", err)
-	}
-
-	node.controller = controllerv1.NewControllerServiceClient(gconn)
-
-	node.controllerAddr = controller
+	node.prefOutboundIP = addr
 
 	return node, nil
 }
 
-func (node *Node) loginOrRegister() error {
-	if err := node.Login(); err != nil {
-		s, _ := status.FromError(err)
-		if s.Code() == codes.NotFound {
-			err = node.Register()
-			if err != nil {
-				return err
-			} else {
-				return node.Login()
-			}
-		} else {
-			return err
-		}
+func (n *Node) Start() error {
+	var err error
+
+	n.runCtx, n.runCancel = context.WithCancel(context.Background())
+
+	n.conn, err = conn.NewConn(n.port)
+	if err != nil {
+		return err
+	}
+
+	// Create local tunnel interface
+	n.tun, err = tun.NewTun()
+	if err != nil {
+		return err
+	}
+
+	err = n.Run()
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func (node *Node) Run(ctx context.Context) error {
-	// Register with controller
-	err := node.loginOrRegister()
-	if err != nil {
-		return err
+func (node *Node) Run() error {
+	if node.conn == nil || node.tun == nil {
+		return fmt.Errorf("node connections have not been initialized")
 	}
 
+	loggedIn := node.loggedIn.Load()
+	if !loggedIn {
+		return fmt.Errorf("node has not been logged in")
+	}
+
+	//defer func() {
+	//	node.conn.Close()
+	//	node.tun.Close()
+	//	node.conn = nil
+	//	node.tun = nil
+	//}()
 	// Configure tunnel ip/routes
-	err = node.tun.ConfigureIPAddress(node.ip)
+	err := node.tun.ConfigureIPAddress(node.ip)
 	if err != nil {
 		return err
 	}
 
 	// Initially set endpoints
-	err = node.SendDiscoveryRequest()
-	if err != nil {
-		return err
-	}
+	//err = node.SendDiscoveryRequest()
+	//if err != nil {
+	//	return err
+	//}
 
 	go node.ReadUDPPackets(node.OnUDPPacket, 0)
 	go node.ReadTunPackets(node.OnTunnelPacket)
 
-	node.StartUpdateStream(ctx)
-	// TODO
-	<-ctx.Done()
-
-	node.conn.Close()
-	node.tun.Close()
+	node.StartUpdateStream(node.runCtx)
 
 	//for _, peer := range node.maps.id {
 	//	if peer.running.Load() {
@@ -166,6 +161,29 @@ func (node *Node) Run(ctx context.Context) error {
 	//	}
 	//}
 	return nil
+}
+
+func (node *Node) Stop() error {
+	if node.conn == nil || node.tun == nil {
+		return fmt.Errorf("node connections have not been initialized, so not running")
+	}
+
+	node.StopAllPeers()
+	node.runCancel()
+	node.conn.Close()
+	node.tun.Close()
+	//node.grpcClient.Close()
+	//node.grpcClient = nil
+	return nil
+}
+
+func (node *Node) StopAllPeers() {
+	node.maps.l.RLock()
+	defer node.maps.l.RUnlock()
+
+	for _, peer := range node.maps.id {
+		peer.Stop()
+	}
 }
 
 func (node *Node) lookupPeer(id uint32) (*Peer, bool) {
@@ -233,7 +251,7 @@ func (node *Node) OnUDPPacket(buffer *InboundBuffer, index int) {
 		return
 	case header.Discovery:
 		// Logic to process stun/discovery responses
-		node.HandleDiscoveryResponse(buffer)
+		//node.HandleDiscoveryResponse(buffer)
 		PutInboundBuffer(buffer)
 		return
 	default:

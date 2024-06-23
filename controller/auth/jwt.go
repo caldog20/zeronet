@@ -19,14 +19,13 @@ var (
 )
 
 type Claims struct {
-	User string `json:"user"`
-	// MachineID string `json:"machine_id"`
+	MachineID string `json:"machine_id"`
 	jwt.RegisteredClaims
 }
 
 func getExpireDate() *jwt.NumericDate {
 	// return jwt.NewNumericDate(time.Now().Add(DaysTokenValid * (24 * time.Hour)))
-	return jwt.NewNumericDate(time.Now().Add(time.Second * 5))
+	return jwt.NewNumericDate(time.Now().Add((time.Hour * 24) * DaysTokenValid))
 }
 
 func GenerateJwtWithClaims(user string) (string, error) {

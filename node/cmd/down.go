@@ -11,10 +11,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-func NewUpCommand() *cobra.Command {
+func NewDownCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "up",
-		Short: "runs node service",
+		Use:   "down",
+		Short: "downs node service",
 		Run: func(cmd *cobra.Command, args []string) {
 			dialCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
@@ -24,17 +24,11 @@ func NewUpCommand() *cobra.Command {
 			}
 
 			client := nodev1.NewNodeServiceClient(conn)
-			login, err := client.Login(context.Background(), &nodev1.LoginRequest{AccessToken: ""})
+			down, err := client.Down(context.Background(), &nodev1.DownRequest{})
 			if err != nil {
 				log.Fatal(err)
 			}
-			log.Println(login.GetStatus())
-
-			up, err := client.Up(context.Background(), &nodev1.UpRequest{})
-			if err != nil {
-				log.Fatal(err)
-			}
-			log.Println(up.GetStatus())
+			log.Println(down.GetStatus())
 		},
 	}
 

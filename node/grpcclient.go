@@ -3,67 +3,91 @@ package node
 import (
 	"context"
 	"crypto/subtle"
-	"encoding/base64"
+	"errors"
 	"log"
 	"net"
-	"net/netip"
+	"time"
 
 	"github.com/caldog20/zeronet/node/conn"
 	"github.com/caldog20/zeronet/pkg/header"
 	controllerv1 "github.com/caldog20/zeronet/proto/gen/controller/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-func (node *Node) Login() error {
-	node.noise.l.Lock()
-	defer node.noise.l.Unlock()
-
-	pubkey := base64.StdEncoding.EncodeToString(node.noise.keyPair.Public)
-	login, err := node.controller.LoginPeer(
-		context.TODO(),
-		&controllerv1.LoginRequest{PublicKey: pubkey},
-	)
-	if err != nil {
-		return err
-	}
-
-	node.id = login.Config.Id
-	node.ip = netip.MustParsePrefix(login.Config.TunnelIp)
-
-	return nil
+type ControllerClient struct {
+	client controllerv1.ControllerServiceClient
+	conn   *grpc.ClientConn
 }
 
-func (node *Node) SetRemoteEndpoint(endpoint string) error {
-	_, err := node.controller.SetPeerEndpoint(context.TODO(), &controllerv1.Endpoint{
-		Id:       node.id,
-		Endpoint: endpoint,
-	})
+func NewControllerClient(address string) (*ControllerClient, error) {
+	dialCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	conn, err := grpc.DialContext(dialCtx, address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
-		return err
+		return nil, errors.New("error connecting to controller grpc server at: " + address)
 	}
-	return nil
+
+	client := controllerv1.NewControllerServiceClient(conn)
+	return &ControllerClient{client, conn}, nil
 }
 
-func (node *Node) Register() error {
-	node.noise.l.RLock()
-	defer node.noise.l.RUnlock()
-	pubkey := base64.StdEncoding.EncodeToString(node.noise.keyPair.Public)
-
-	regmsg := &controllerv1.RegisterRequest{
-		PublicKey:   pubkey,
-		RegisterKey: "registermeplz!",
-	}
-
-	_, err := node.controller.RegisterPeer(context.TODO(), regmsg)
-	if err != nil {
-		return err
-	}
-
-	return nil
+func (c *ControllerClient) Close() error {
+	c.client = nil
+	return c.conn.Close()
 }
+
+//func (node *Node) Login() error {
+//	node.noise.l.Lock()
+//	defer node.noise.l.Unlock()
+//
+//	pubkey := base64.StdEncoding.EncodeToString(node.noise.keyPair.Public)
+//	login, err := node.controller.LoginPeer(
+//		context.TODO(),
+//		&controllerv1.LoginRequest{PublicKey: pubkey},
+//	)
+//	if err != nil {
+//		return err
+//	}
+//
+//	node.id = login.Config.Id
+//	node.ip = netip.MustParsePrefix(login.Config.TunnelIp)
+//
+//	return nil
+//}
+
+//func (node *Node) SetRemoteEndpoint(endpoint string) error {
+//	_, err := node.controller.SetPeerEndpoint(context.TODO(), &controllerv1.Endpoint{
+//		Id:       node.id,
+//		Endpoint: endpoint,
+//	})
+//	if err != nil {
+//		return err
+//	}
+//	return nil
+//}
+//
+//func (node *Node) Register() error {
+//	node.noise.l.RLock()
+//	defer node.noise.l.RUnlock()
+//	pubkey := base64.StdEncoding.EncodeToString(node.noise.keyPair.Public)
+//
+//	regmsg := &controllerv1.RegisterRequest{
+//		PublicKey:   pubkey,
+//		RegisterKey: "registermeplz!",
+//	}
+//
+//	_, err := node.controller.RegisterPeer(context.TODO(), regmsg)
+//	if err != nil {
+//		return err
+//	}
+//
+//	return nil
+//}
 
 func (node *Node) StartUpdateStream(ctx context.Context) {
-	stream, err := node.controller.Update(context.Background(), &controllerv1.UpdateRequest{
-		Id: node.id,
+	stream, err := node.grpcClient.client.UpdateStream(context.Background(), &controllerv1.UpdateRequest{
+		MachineId: node.machineID,
 	})
 	if err != nil {
 		log.Fatal(err)
@@ -94,13 +118,13 @@ func (node *Node) StartUpdateStream(ctx context.Context) {
 
 func (node *Node) HandleUpdate(update *controllerv1.UpdateResponse) {
 	switch update.UpdateType {
-	case controllerv1.UpdateResponse_INIT:
+	case controllerv1.UpdateType_INIT:
 		node.handleInitialSync(update)
-	case controllerv1.UpdateResponse_CONNECT:
+	case controllerv1.UpdateType_CONNECT:
 		node.handlePeerConnectUpdate(update)
-	case controllerv1.UpdateResponse_DISCONNECT:
+	case controllerv1.UpdateType_DISCONNECT:
 		//node.handlePeerDisconnectUpdate(update)
-	case controllerv1.UpdateResponse_PUNCH:
+	case controllerv1.UpdateType_PUNCH:
 		node.handlePeerPunchRequest(update)
 	default:
 		log.Println("unmatched update message type")
@@ -146,7 +170,7 @@ func (node *Node) handlePeerConnectUpdate(update *controllerv1.UpdateResponse) {
 	if update.PeerList.Count < 1 {
 		return
 	}
-	if update.UpdateType != controllerv1.UpdateResponse_CONNECT {
+	if update.UpdateType != controllerv1.UpdateType_CONNECT {
 		return
 	}
 
@@ -227,7 +251,7 @@ func (peer *Peer) Update(info *controllerv1.Peer) error {
 		}
 	}
 
-	newIP, err := ParseAddr(info.TunnelIp)
+	newIP, err := ParseAddr(info.Ip)
 	if err != nil {
 		log.Println(err)
 		//return err
@@ -244,13 +268,14 @@ func (peer *Peer) Update(info *controllerv1.Peer) error {
 
 func (node *Node) RequestPunch(id uint32) {
 	// TODO Fix response for requesting punches
-	_, err := node.controller.Punch(context.Background(), &controllerv1.PunchRequest{
-		ReqPeerId: node.id,
-		DstPeerId: id,
-		Endpoint:  node.discoveredEndpoint.String(),
-	})
-	if err != nil {
-		log.Println(err)
-		return
-	}
+	return
+	//_, err := node.grpcClient.client.Punch(context.Background(), &controllerv1.PunchRequest{
+	//	ReqPeerId: node.id,
+	//	DstPeerId: id,
+	//	Endpoint:  node.discoveredEndpoint.String(),
+	//})
+	//if err != nil {
+	//	log.Println(err)
+	//	return
+	//}
 }

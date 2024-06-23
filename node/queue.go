@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/caldog20/overlay/pkg/header"
+	"github.com/caldog20/zeronet/pkg/header"
 )
 
 const BufferSize = 1600

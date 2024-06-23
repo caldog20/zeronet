@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/caldog20/overlay/node"
+	"github.com/caldog20/zeronet/node"
 	"github.com/spf13/cobra"
 )
 
