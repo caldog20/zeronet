@@ -121,7 +121,7 @@ func (node *Node) AddPeer(peerInfo *proto.Peer) (*Peer, error) {
 		return nil, err
 	}
 
-	//peer.Hostname = peerInfo.Hostname
+	peer.Hostname = peerInfo.Hostname
 
 	peer.raddr, err = net.ResolveUDPAddr("udp4", peerInfo.Endpoint)
 	if err != nil {

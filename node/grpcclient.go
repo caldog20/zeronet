@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"errors"
+	"io"
 	"log"
 	"net"
 	"time"
@@ -86,7 +87,7 @@ func (c *ControllerClient) Close() error {
 //}
 
 func (node *Node) StartUpdateStream(ctx context.Context) {
-	stream, err := node.grpcClient.client.UpdateStream(context.Background(), &controllerv1.UpdateRequest{
+	stream, err := node.grpcClient.client.UpdateStream(ctx, &controllerv1.UpdateRequest{
 		MachineId: node.machineID,
 	})
 	if err != nil {
@@ -107,8 +108,13 @@ func (node *Node) StartUpdateStream(ctx context.Context) {
 				return
 			default:
 				response, err = stream.Recv()
+				// TODO properly handle error
 				if err != nil {
-					return
+					if err == io.EOF {
+						return
+					}
+					log.Printf("error receiving stream update response: %v", err)
+					continue
 				}
 				node.HandleUpdate(response)
 			}
@@ -126,10 +132,22 @@ func (node *Node) HandleUpdate(update *controllerv1.UpdateResponse) {
 		//node.handlePeerDisconnectUpdate(update)
 	case controllerv1.UpdateType_PUNCH:
 		node.handlePeerPunchRequest(update)
+	case controllerv1.UpdateType_LOGOUT:
+		node.handleLogout()
 	default:
 		log.Println("unmatched update message type")
 		return
 	}
+}
+
+// TODO Controller is forcing peer to log out
+// Node grpc service should still run, and requires a login/up to start again
+func (node *Node) handleLogout() {
+	err := node.Stop()
+	if err != nil {
+		log.Println("error stopping node during logout")
+	}
+	node.loggedIn.Store(false)
 }
 
 func (node *Node) handlePeerPunchRequest(update *controllerv1.UpdateResponse) {

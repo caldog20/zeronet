@@ -36,7 +36,7 @@ func (c *Controller) GetConnectedPeers(id uint32) (*ctrlv1.PeerList, error) {
 
 	// Loop through and convert to protobuf message
 	var peerList []*ctrlv1.Peer
-	
+
 	for _, p := range peers {
 		if p.ID != id {
 			peerList = append(peerList, p.Proto())
@@ -95,4 +95,15 @@ func (c *Controller) PeerDisconnectedEvent(id uint32) {
 		}
 		return true
 	})
+}
+
+func (c *Controller) PeerForcedLogoutEvent(id uint32) {
+	update := &ctrlv1.UpdateResponse{
+		UpdateType: ctrlv1.UpdateType_LOGOUT,
+	}
+
+	pc, ok := c.peerChannels.Load(id)
+	if ok {
+		pc.(chan *ctrlv1.UpdateResponse) <- update
+	}
 }

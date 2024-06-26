@@ -5,8 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"net/netip"
+	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -53,6 +56,7 @@ type Node struct {
 	runCancel context.CancelFunc
 	nodev1.UnimplementedNodeServiceServer
 	machineID string
+	hostname  string
 	loggedIn  atomic.Bool
 }
 
@@ -84,6 +88,16 @@ func NewNode(controller string, port uint16) (*Node, error) {
 		return nil, fmt.Errorf("error generating machine ID: %s", err.Error())
 	}
 
+	host, err := os.Hostname()
+	if err != nil {
+		log.Printf("error getting hostname: %s", err.Error())
+		host = fmt.Sprintf("node-%d", rand.Uint32())
+		log.Printf("defaulting hostname to %s", host)
+	} else {
+		hostname := strings.Split(host, ".")
+		node.hostname = hostname[0]
+	}
+
 	node.grpcClient, err = NewControllerClient(controller)
 	if err != nil {
 		return nil, err
@@ -100,6 +114,16 @@ func NewNode(controller string, port uint16) (*Node, error) {
 
 func (n *Node) Start() error {
 	var err error
+
+	loggedIn := n.loggedIn.Load()
+	if !loggedIn {
+		return fmt.Errorf("node has not been logged in")
+	}
+
+	running := n.running.Load()
+	if running {
+		return fmt.Errorf("node is already running")
+	}
 
 	n.conn, err = conn.NewConn(n.port)
 	if err != nil {
@@ -132,11 +156,6 @@ func (node *Node) Run() error {
 		return fmt.Errorf("node connections have not been initialized")
 	}
 
-	loggedIn := node.loggedIn.Load()
-	if !loggedIn {
-		return fmt.Errorf("node has not been logged in")
-	}
-
 	// Configure tunnel ip/routes
 	err := node.tun.ConfigureIPAddress(node.ip)
 	if err != nil {
@@ -159,6 +178,8 @@ func (node *Node) Run() error {
 	//		peer.cancel()
 	//	}
 	//}
+
+	node.running.Store(true)
 	return nil
 }
 
@@ -167,11 +188,17 @@ func (node *Node) Stop() error {
 		return fmt.Errorf("node connections have not been initialized, so not running")
 	}
 
+	running := node.running.Load()
+	if !running {
+		return fmt.Errorf("node is already stopped")
+	}
+
 	node.StopAllPeers()
 	node.runCancel()
 	node.conn.Close()
 	node.tun.Close()
-	node.loggedIn.Store(false)
+
+	node.running.Store(false)
 	//node.grpcClient.Close()
 	//node.grpcClient = nil
 	return nil
@@ -182,7 +209,7 @@ func (node *Node) StopAllPeers() {
 	defer node.maps.l.RUnlock()
 
 	for _, peer := range node.maps.id {
-		peer.Stop()
+		go peer.Stop()
 	}
 }
 

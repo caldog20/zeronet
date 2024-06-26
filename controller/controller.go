@@ -16,7 +16,7 @@ type Controller struct {
 	db *db.Store
 
 	// Config Related Items
-	prefix       netip.Prefix
+	prefix netip.Prefix
 	// currentPeers sync.Map
 	peerChannels sync.Map
 }
@@ -43,7 +43,7 @@ func (c *Controller) ProcessPeerLogin(peer *types.Peer, req *ctrlv1.LoginPeerReq
 	peer.Hostname = req.GetHostname()
 	peer.Endpoint = req.GetEndpoint()
 	peer.Connected = false
-	// peer.LoggedIn = true
+	peer.LoggedIn = true
 
 	// Update peer in database
 	err := c.db.UpdatePeer(peer)
@@ -59,19 +59,25 @@ func (c *Controller) ProcessPeerLogin(peer *types.Peer, req *ctrlv1.LoginPeerReq
 }
 
 // func (c *Controller) DisablePeer(peer *types.Peer) error {
-// 
+//
 // }
 
 func (c *Controller) LogoutPeer(peer *types.Peer) error {
 	peer.Connected = false
-	// peer.LoggedIn = false
-	// c.currentPeers.Delete(peer.ID)
-	c.DeletePeerUpdateChannel(peer.ID)
+	peer.LoggedIn = false
+
+	// Logout Peer
+	c.PeerForcedLogoutEvent(peer.ID)
+	go func() {
+		// Wait for 10 seconds before cleaning up channel
+		time.Sleep(time.Second * 10)
+		c.DeletePeerUpdateChannel(peer.ID)
+	}()
 
 	// Handle per logout event here
 	// go c.PeerLogoutEvent(peer.Copy())
 
-	err := c.db.SetPeerConnected(peer, false)
+	err := c.db.UpdatePeer(&types.Peer{ID: peer.ID, LoggedIn: false, Connected: false})
 	if err != nil {
 		return err
 	}
@@ -125,7 +131,7 @@ func (c *Controller) RegisterPeer(
 		Connected:      false,
 		LoggedIn:       true,
 		LastAuth:       time.Now(),
-		LastLogin: 		time.Now(),
+		LastLogin:      time.Now(),
 		User:           userID,
 	}
 

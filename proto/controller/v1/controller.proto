@@ -41,7 +41,7 @@ message LoginPeerResponse { PeerConfig config = 1; }
 
 message GetPeersRequest {}
 
-message GetPeersResponse { repeated Peer peers = 1; }
+message GetPeersResponse { repeated PeerDetails peers = 1; }
 
 message DeletePeerRequest { uint32 peer_id = 1; }
 

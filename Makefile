@@ -16,7 +16,7 @@ PROTO_OUTPUT += proto/gen/controller/v1/auth.pb.go
 PROTO_OUTPUT += proto/gen/node/v1/node.pb.go
 PROTO_OUTPUT += proto/gen/node/v1/node_grpc.pb.go
 
-all: controller
+all: controller node
 
 tidy:
 	@go mod tidy
@@ -62,7 +62,7 @@ clean:
 	#rm -rf store.db
 	rm -rf third_party/OpenAPI
 
-cleandb:
-	@rm -rf store.db
+clean-db:
+	@rm -f store.db
 
 .PHONY: all controller docker-controller deps frontend buf-lint clean node all cleandb

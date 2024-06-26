@@ -47,5 +47,10 @@ cmd/blah
 cmd/testing
 cmd/wintun-test
 cmd/svc
+
+cmd/controller/controller
+cmd/node/node
+
 **/*.env
+**/*.env.local
 TODO.md

@@ -12,32 +12,32 @@ var (
 	rootCmd = &cobra.Command{
 		Use:   "",
 		Short: "",
-		//Run: func(cmd *cobra.Command, args []string) {
-		//	svc, err := NewService(&program{})
-		//	if err != nil {
-		//		log.Fatal(err)
-		//	}
-		//
-		//	errs := make(chan error, 5)
-		//	logger, err = svc.Logger(errs)
-		//	if err != nil {
-		//		log.Fatal(err)
-		//	}
-		//
-		//	go func() {
-		//		for {
-		//			err := <-errs
-		//			if err != nil {
-		//				log.Print(err)
-		//			}
-		//		}
-		//	}()
-		//
-		//	err = svc.Run()
-		//	if err != nil {
-		//		log.Fatal(err)
-		//	}
-		//},
+		Run: func(cmd *cobra.Command, args []string) {
+			svc, err := NewService(&program{})
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			errs := make(chan error, 5)
+			logger, err = svc.Logger(errs)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			go func() {
+				for {
+					err := <-errs
+					if err != nil {
+						log.Print(err)
+					}
+				}
+			}()
+
+			err = svc.Run()
+			if err != nil {
+				log.Fatal(err)
+			}
+		},
 	}
 )
 
@@ -50,6 +50,7 @@ func init() {
 	rootCmd.AddCommand(NewRunCommand())
 	rootCmd.AddCommand(NewStopCommand())
 	rootCmd.AddCommand(NewGenerateKeypairCommand())
+	rootCmd.AddCommand(NewLoginCommand())
 
 	//rootCmd.PersistentFlags().BoolVar(&profile, "profile", false, "enable pprof profile")
 }

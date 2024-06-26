@@ -51,7 +51,7 @@ func (s *GRPCServer) LoginPeer(
 			log.Debugf("peer %s auth is expired", peer.MachineID)
 
 			// Validate Access Token for reauthenticating peer
-			user, err := s.validateAccessToken(req.GetAccessToken());
+			user, err := s.validateAccessToken(req.GetAccessToken())
 			if err != nil {
 				log.Debugf("peer %s access token is invalid", peer.MachineID)
 				if peer.IsLoggedIn() {
@@ -63,7 +63,6 @@ func (s *GRPCServer) LoginPeer(
 			if peer.User != user {
 				return nil, status.Error(codes.PermissionDenied, "cannot login a peer that belongs to another user - delete the peer and re-register")
 			}
-
 
 			// Access Token was validated, update peer LastAuth now before Login attempt
 			peer.UpdateAuth()
@@ -135,7 +134,7 @@ func (s *GRPCServer) UpdateStream(req *ctrlv1.UpdateRequest, stream ctrlv1.Contr
 
 	initialPeerList := &ctrlv1.UpdateResponse{
 		UpdateType: ctrlv1.UpdateType_INIT,
-		PeerList: connectedPeers,
+		PeerList:   connectedPeers,
 	}
 
 	err = stream.Send(initialPeerList)
@@ -167,37 +166,31 @@ func (s *GRPCServer) UpdateStream(req *ctrlv1.UpdateRequest, stream ctrlv1.Contr
 	}
 }
 
-
-
-
-
-
-
-////////////////////////////////
+// //////////////////////////////
 // GRPC Gateway API Methods
-////////////////////////////////
+// //////////////////////////////
 func (s *GRPCServer) GetPeers(
 	ctx context.Context,
 	req *ctrlv1.GetPeersRequest,
 ) (*ctrlv1.GetPeersResponse, error) {
 
-	token, err := extractTokenMetadata(ctx)
-	if err != nil {
-		return nil, err
-	}
-	_, err = s.validateAccessToken(token)
-	if err != nil {
-		return nil, err
-	}
+	//token, err := extractTokenMetadata(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//_, err = s.validateAccessToken(token)
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	peers, err := s.controller.db.GetPeers()
 	if err != nil {
 		return nil, status.Error(codes.Internal, "error getting peers from database")
 	}
 
-	var p []*ctrlv1.Peer
+	var p []*ctrlv1.PeerDetails
 	for _, peer := range peers {
-		p = append(p, peer.Proto())
+		p = append(p, peer.ProtoDetails())
 	}
 
 	return &ctrlv1.GetPeersResponse{Peers: p}, nil
@@ -208,17 +201,17 @@ func (s *GRPCServer) DeletePeer(
 	req *ctrlv1.DeletePeerRequest,
 ) (*ctrlv1.DeletePeerResponse, error) {
 
-	token, err := extractTokenMetadata(ctx)
-	if err != nil {
-		return nil, err
-	}
+	//token, err := extractTokenMetadata(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//_, err = s.validateAccessToken(token)
+	//if err != nil {
+	//	return nil, err
+	//}
 
-	_, err = s.validateAccessToken(token)
-	if err != nil {
-		return nil, err
-	}
-
-	err = s.controller.DeletePeer(req.GetPeerId())
+	err := s.controller.DeletePeer(req.GetPeerId())
 	if err != nil {
 		// TODO: Fix this
 		if err.Error() == "peer doesn't exist" {

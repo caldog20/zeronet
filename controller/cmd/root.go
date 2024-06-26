@@ -29,13 +29,13 @@ import (
 )
 
 var (
-	storePath     string
-	prefix        string
-	autoCert      bool
-	grpcPort      uint16
-	httpPort      uint16
+	storePath string
+	prefix    string
+	autoCert  bool
+	grpcPort  uint16
+	httpPort  uint16
 	// discoveryPort uint16
-	debug         bool
+	debug bool
 
 	// TODO: Refactor: Many components should have the basic setup done in separate functions part of their type
 	rootCmd = &cobra.Command{
@@ -144,7 +144,7 @@ var (
 )
 
 func StopHTTPServer(s *http.Server) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 10)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	err := s.Shutdown(ctx)
 	if err == context.DeadlineExceeded {

@@ -5,6 +5,7 @@ go 1.22.2
 require (
 	github.com/MicahParks/keyfunc/v3 v3.3.2
 	github.com/caldog20/machineid v0.0.0-20240422190246-56eb81efb865
+	github.com/fatih/color v1.17.0
 	github.com/flynn/noise v1.1.0
 	github.com/glebarez/sqlite v1.11.0
 	github.com/golang-jwt/jwt/v5 v5.2.1
@@ -40,6 +41,7 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect

@@ -31,6 +31,8 @@ type program struct {
 }
 
 func (p *program) Start(s service.Service) error {
+	cpus := runtime.NumCPU()
+	runtime.GOMAXPROCS(cpus)
 
 	node, err := node.NewNode(controller, port)
 	if err != nil {
@@ -72,8 +74,6 @@ func NewStartCommand() *cobra.Command {
 		Long:  "",
 		Run: func(cmd *cobra.Command, args []string) {
 			//fmt.Println("please use a subcommand or use -h for help")
-			cpus := runtime.NumCPU()
-			runtime.GOMAXPROCS(cpus)
 
 			prg := &program{}
 
@@ -117,16 +117,44 @@ func NewUpCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			dialCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 			defer cancel()
+
 			conn, err := grpc.DialContext(dialCtx, "127.0.0.1:55000", grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				log.Fatal(err)
 			}
 
 			client := nodev1.NewNodeServiceClient(conn)
+
+			up, err := client.Up(context.Background(), &nodev1.UpRequest{})
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Println(up.GetStatus())
+		},
+	}
+
+	return cmd
+}
+
+func NewLoginCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "login",
+		Short: "login",
+		Run: func(cmd *cobra.Command, args []string) {
+			dialCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+			conn, err := grpc.DialContext(dialCtx, "127.0.0.1:55000", grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			client := nodev1.NewNodeServiceClient(conn)
+
 			login, err := client.Login(context.Background(), &nodev1.LoginRequest{AccessToken: ""})
 			if err != nil {
 				log.Fatal(err)
 			}
+
 			status := login.GetStatus()
 			if status == "login successful" {
 				log.Println("node login successful")
@@ -140,12 +168,6 @@ func NewUpCommand() *cobra.Command {
 					log.Fatal(err)
 				}
 			}
-
-			up, err := client.Up(context.Background(), &nodev1.UpRequest{})
-			if err != nil {
-				log.Fatal(err)
-			}
-			log.Println(up.GetStatus())
 		},
 	}
 
@@ -224,4 +246,28 @@ func NewStopCommand() *cobra.Command {
 			}
 		},
 	}
+}
+
+func NewDownCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "down",
+		Short: "downs node service",
+		Run: func(cmd *cobra.Command, args []string) {
+			dialCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+			defer cancel()
+			conn, err := grpc.DialContext(dialCtx, "127.0.0.1:55000", grpc.WithTransportCredentials(insecure.NewCredentials()))
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			client := nodev1.NewNodeServiceClient(conn)
+			down, err := client.Down(context.Background(), &nodev1.DownRequest{})
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Println(down.GetStatus())
+		},
+	}
+
+	return cmd
 }

@@ -15,10 +15,10 @@ type Peer struct {
 	Endpoint       string `json:"endpoint"`
 	Hostname       string `json:"hostname"`
 
-	LoggedIn bool `json:"logged_in"`
+	LoggedIn  bool   `json:"logged_in"`
 	Connected bool   `json:"connected"`
 	User      string `json:"user"`
-	Disabled bool `json:"disabled"`
+	Disabled  bool   `json:"disabled"`
 	// JWT      string
 
 	LastLogin time.Time
@@ -40,7 +40,6 @@ func (p *Peer) Copy() *Peer {
 		p.LoggedIn,
 		p.User,
 		p.Disabled,
-		// p.JWT,
 		p.LastLogin,
 		p.LastAuth,
 		p.CreatedAt,
@@ -58,7 +57,26 @@ func (p *Peer) Proto() *ctrlv1.Peer {
 		Endpoint:  p.Endpoint,
 		Prefix:    p.Prefix,
 		User:      p.User,
-		Connected:  p.Connected,
+		Connected: p.Connected,
+	}
+}
+
+func (p *Peer) ProtoDetails() *ctrlv1.PeerDetails {
+	return &ctrlv1.PeerDetails{
+		MachineId: p.MachineID,
+		Id:        p.ID,
+		PublicKey: p.NoisePublicKey,
+		Hostname:  p.Hostname,
+		Ip:        p.IP,
+		Endpoint:  p.Endpoint,
+		Prefix:    p.Prefix,
+		User:      p.User,
+		Connected: p.Connected,
+		Disabled:  p.Disabled,
+		LastLogin: p.LastLogin.Format("Mon Jan 2 15:04 CST 2006"),
+		LastAuth:  p.LastAuth.Format("Mon Jan 2 15:04 CST 2006"),
+		CreatedAt: p.CreatedAt.Format("Mon Jan 2 15:04 CST 2006"),
+		UpdatedAt: p.UpdatedAt.Format("Mon Jan 2 15:04 CST 2006"),
 	}
 }
 

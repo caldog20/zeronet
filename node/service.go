@@ -39,7 +39,7 @@ func (n *Node) Login(ctx context.Context, req *nodev1.LoginRequest) (*nodev1.Log
 	loginRequest := &controllerv1.LoginPeerRequest{
 		MachineId:   n.machineID,
 		PublicKey:   pubkey,
-		Hostname:    n.machineID,
+		Hostname:    n.hostname,
 		Endpoint:    fmt.Sprintf("%s:%d", n.prefOutboundIP.String(), n.port),
 		AccessToken: req.GetAccessToken(),
 	}
