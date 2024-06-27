@@ -57,35 +57,36 @@ func (c *ControllerClient) Close() error {
 //	return nil
 //}
 
-//func (node *Node) SetRemoteEndpoint(endpoint string) error {
-//	_, err := node.controller.SetPeerEndpoint(context.TODO(), &controllerv1.Endpoint{
-//		Id:       node.id,
-//		Endpoint: endpoint,
-//	})
-//	if err != nil {
-//		return err
-//	}
-//	return nil
-//}
-//
-//func (node *Node) Register() error {
-//	node.noise.l.RLock()
-//	defer node.noise.l.RUnlock()
-//	pubkey := base64.StdEncoding.EncodeToString(node.noise.keyPair.Public)
-//
-//	regmsg := &controllerv1.RegisterRequest{
-//		PublicKey:   pubkey,
-//		RegisterKey: "registermeplz!",
+//	func (node *Node) SetRemoteEndpoint(endpoint string) error {
+//		_, err := node.controller.SetPeerEndpoint(context.TODO(), &controllerv1.Endpoint{
+//			Id:       node.id,
+//			Endpoint: endpoint,
+//		})
+//		if err != nil {
+//			return err
+//		}
+//		return nil
 //	}
 //
-//	_, err := node.controller.RegisterPeer(context.TODO(), regmsg)
-//	if err != nil {
-//		return err
+//	func (node *Node) Register() error {
+//		node.noise.l.RLock()
+//		defer node.noise.l.RUnlock()
+//		pubkey := base64.StdEncoding.EncodeToString(node.noise.keyPair.Public)
+//
+//		regmsg := &controllerv1.RegisterRequest{
+//			PublicKey:   pubkey,
+//			RegisterKey: "registermeplz!",
+//		}
+//
+//		_, err := node.controller.RegisterPeer(context.TODO(), regmsg)
+//		if err != nil {
+//			return err
+//		}
+//
+//		return nil
 //	}
 //
-//	return nil
-//}
-
+// TODO: Move some of the stream logic to ControllerClient
 func (node *Node) StartUpdateStream(ctx context.Context) {
 	stream, err := node.grpcClient.client.UpdateStream(ctx, &controllerv1.UpdateRequest{
 		MachineId: node.machineID,

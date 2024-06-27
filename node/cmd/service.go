@@ -98,9 +98,9 @@ func NewStartCommand() *cobra.Command {
 func NewService(program service.Interface) (service.Service, error) {
 	options := make(service.KeyValue)
 	options["Restart"] = "on-success"
-	options["SuccessExitStatus"] = "1 2 8 SIGKILL SIGINT"
+	options["SuccessExitStatus"] = "1 2 8 SIGKILL"
 	svcConfig := &service.Config{
-		Name:        "Zeronet Node Service",
+		Name:        "com.zeronet.node.service",
 		DisplayName: "Zeronet Node Service",
 		Description: "Zeronet Node Service",
 		Option:      options,
