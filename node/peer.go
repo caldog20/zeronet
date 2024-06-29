@@ -173,6 +173,7 @@ func (peer *Peer) Stop() {
 	peer.wg.Wait()
 	log.Printf("peer %d goroutines have stopped", peer.ID)
 	peer.running.Store(false)
+	peer.pendingLock.Unlock()
 }
 
 func (peer *Peer) InboundPacket(buffer *InboundBuffer) {
@@ -209,7 +210,15 @@ func (peer *Peer) OutboundPacket(buffer *OutboundBuffer) {
 }
 
 func (peer *Peer) ResetState() {
-	peer.running.Store(false)
+	// Temporarily stop peer while resetting state
+	// to prevent peer trying to process packets while clearing
+	// If peer was running, reset the running value after state is cleared
+	wasRunning := peer.running.CompareAndSwap(true, false)
+	if wasRunning {
+		defer func() {
+			peer.running.Store(true)
+		}()
+	}
 
 	peer.mu.Lock()
 	defer peer.mu.Unlock()
@@ -225,7 +234,9 @@ func (peer *Peer) ResetState() {
 	peer.noise.initiator = false
 	peer.noise.state.Store(0)
 	peer.inTransport.Store(false)
-	peer.running.Store(true)
+	if wasRunning {
+		peer.running.Store(true)
+	}
 }
 
 // TODO Not safe for concurrent use, possibly called from different goroutines. fix with lock inside noise struct
