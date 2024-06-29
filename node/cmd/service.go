@@ -95,6 +95,7 @@ func NewStartCommand() *cobra.Command {
 	return cmd
 }
 
+// TODO Fix arguments for service when providing argument for controller address
 func NewService(program service.Interface) (service.Service, error) {
 	options := make(service.KeyValue)
 	options["Restart"] = "on-success"
