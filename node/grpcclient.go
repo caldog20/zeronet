@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/caldog20/zeronet/node/conn"
@@ -45,54 +46,6 @@ func (c *ControllerClient) UpdateEndpoint(id string, endpoint string) {
 	}
 }
 
-//func (node *Node) Login() error {
-//	node.noise.l.Lock()
-//	defer node.noise.l.Unlock()
-//
-//	pubkey := base64.StdEncoding.EncodeToString(node.noise.keyPair.Public)
-//	login, err := node.controller.LoginPeer(
-//		context.TODO(),
-//		&controllerv1.LoginRequest{PublicKey: pubkey},
-//	)
-//	if err != nil {
-//		return err
-//	}
-//
-//	node.id = login.Config.Id
-//	node.ip = netip.MustParsePrefix(login.Config.TunnelIp)
-//
-//	return nil
-//}
-
-//	func (node *Node) SetRemoteEndpoint(endpoint string) error {
-//		_, err := node.controller.SetPeerEndpoint(context.TODO(), &controllerv1.Endpoint{
-//			Id:       node.id,
-//			Endpoint: endpoint,
-//		})
-//		if err != nil {
-//			return err
-//		}
-//		return nil
-//	}
-//
-//	func (node *Node) Register() error {
-//		node.noise.l.RLock()
-//		defer node.noise.l.RUnlock()
-//		pubkey := base64.StdEncoding.EncodeToString(node.noise.keyPair.Public)
-//
-//		regmsg := &controllerv1.RegisterRequest{
-//			PublicKey:   pubkey,
-//			RegisterKey: "registermeplz!",
-//		}
-//
-//		_, err := node.controller.RegisterPeer(context.TODO(), regmsg)
-//		if err != nil {
-//			return err
-//		}
-//
-//		return nil
-//	}
-//
 // TODO: Move some of the stream logic to ControllerClient
 func (node *Node) StartUpdateStream(ctx context.Context) {
 	stream, err := node.grpcClient.client.UpdateStream(ctx, &controllerv1.UpdateRequest{
@@ -229,7 +182,7 @@ func (peer *Peer) Update(info *controllerv1.Peer) error {
 	peer.mu.RLock()
 	currentEndpoint := peer.raddr.AddrPort()
 	currentKey := peer.noise.pubkey
-	//currentHostname := peer.Hostname
+	currentHostname := peer.Hostname
 	currentIP := peer.IP
 	peer.mu.RUnlock()
 
@@ -251,29 +204,29 @@ func (peer *Peer) Update(info *controllerv1.Peer) error {
 		peer.mu.Unlock()
 	}
 
-	//if strings.Compare(currentHostname, info.Hostname) != 0 {
-	//	peer.mu.Lock()
-	//	peer.Hostname = info.Hostname
-	//	peer.mu.Unlock()
-	//}
+	if strings.Compare(currentHostname, info.Hostname) != 0 {
+		peer.mu.Lock()
+		peer.Hostname = info.Hostname
+		peer.mu.Unlock()
+	}
 
 	newKey, err := DecodeBase64Key(info.PublicKey)
 	if err != nil {
 		log.Println(err)
 		//return err
-	}
-
-	if subtle.ConstantTimeCompare(currentKey, newKey) != 1 {
-		// TODO If the key has changed, we need to stop the peer and clear state,
-		// update new key and restart peer completely
-		panic("peer key update not yet implemented")
-		peer.Stop()
-		peer.mu.Lock()
-		peer.noise.pubkey = newKey
-		peer.mu.Unlock()
-		err = peer.Start()
-		if err != nil {
-			panic(err)
+	} else {
+		if subtle.ConstantTimeCompare(currentKey, newKey) != 1 {
+			// TODO If the key has changed, we need to stop the peer and clear state,
+			// update new key and restart peer completely
+			//panic("peer key update not yet implemented")
+			peer.Stop()
+			peer.mu.Lock()
+			peer.noise.pubkey = newKey
+			peer.mu.Unlock()
+			err = peer.Start()
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 
