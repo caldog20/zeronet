@@ -141,6 +141,8 @@ func (peer *Peer) Start() error {
 	peer.mu.Lock()
 	defer peer.mu.Unlock()
 
+	log.Printf("Starting peer %d", peer.ID)
+
 	// Peer is already running
 	if peer.running.Load() {
 		return errors.New("peer already running")
@@ -160,6 +162,8 @@ func (peer *Peer) Start() error {
 }
 
 func (peer *Peer) Stop() {
+	log.Printf("Stopping peer %d", peer.ID)
+	peer.running.Store(false)
 	peer.ResetState()
 
 	// send nil value to kill goroutines
@@ -172,7 +176,6 @@ func (peer *Peer) Stop() {
 	// Wait until all routines are finished
 	peer.wg.Wait()
 	log.Printf("peer %d goroutines have stopped", peer.ID)
-	peer.running.Store(false)
 	peer.pendingLock.Unlock()
 }
 
@@ -234,9 +237,6 @@ func (peer *Peer) ResetState() {
 	peer.noise.initiator = false
 	peer.noise.state.Store(0)
 	peer.inTransport.Store(false)
-	if wasRunning {
-		peer.running.Store(true)
-	}
 }
 
 // TODO Not safe for concurrent use, possibly called from different goroutines. fix with lock inside noise struct
