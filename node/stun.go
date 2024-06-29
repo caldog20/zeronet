@@ -58,9 +58,8 @@ func (node *Node) handleStunMessage(message []byte) {
 		node.lock.Lock()
 		node.discoveredEndpoint = natAddr
 		node.lock.Unlock()
+		node.grpcClient.UpdateEndpoint(id, natAddr)
 	}
-
-	node.grpcClient.UpdateEndpoint(id, natAddr)
 
 	//log.Println("Got stun message", natAddr)
 }
