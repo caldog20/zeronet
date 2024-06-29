@@ -159,7 +159,7 @@ func (node *Node) handleLogout() {
 }
 
 func (node *Node) handlePeerPunchRequest(update *controllerv1.UpdateResponse) {
-	endpoint := update.PeerList.Peers[0].Endpoint
+	endpoint := update.GetPunchEndpoint()
 	ua, err := net.ResolveUDPAddr(conn.UDPType, endpoint)
 	if err != nil {
 		log.Printf("error parsing udp punch address: %s", err)
@@ -293,15 +293,15 @@ func (peer *Peer) Update(info *controllerv1.Peer) error {
 }
 
 func (node *Node) RequestPunch(id uint32) {
-	// TODO Fix response for requesting punches
-	return
-	//_, err := node.grpcClient.client.Punch(context.Background(), &controllerv1.PunchRequest{
-	//	ReqPeerId: node.id,
-	//	DstPeerId: id,
-	//	Endpoint:  node.discoveredEndpoint.String(),
-	//})
-	//if err != nil {
-	//	log.Println(err)
-	//	return
-	//}
+	node.lock.RLock()
+	defer node.lock.RUnlock()
+	_, err := node.grpcClient.client.Punch(context.Background(), &controllerv1.PunchRequest{
+		MachineId: node.machineID,
+		DstPeerId: id,
+		Endpoint:  node.discoveredEndpoint,
+	})
+
+	if err != nil {
+		log.Printf("error requesting punch for peer id %d: %v", id, err)
+	}
 }

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/caldog20/machineid"
 	conn "github.com/caldog20/zeronet/node/conn"
@@ -173,6 +174,9 @@ func (node *Node) Run() error {
 	}
 
 	go node.ReadUDPPackets(node.OnUDPPacket, 0)
+
+	// Sleep for 5 seconds to get initial stun response
+	time.Sleep(time.Second * 5)
 
 	node.StartUpdateStream(node.runCtx)
 

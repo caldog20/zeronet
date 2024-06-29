@@ -56,6 +56,29 @@ func (s *GRPCServer) UpdateEndpoint(ctx context.Context, req *ctrlv1.UpdateEndpo
 	return &ctrlv1.UpdateEndpointResponse{}, nil
 }
 
+func (s *GRPCServer) Punch(ctx context.Context, req *ctrlv1.PunchRequest) (*ctrlv1.PunchResponse, error) {
+	if !validateMachineID(req.GetMachineId()) {
+		return nil, status.Error(codes.InvalidArgument, "invalid machine ID")
+	}
+
+	peer := s.controller.db.GetPeerByMachineID(req.GetMachineId())
+	if peer == nil {
+		return nil, status.Error(codes.NotFound, "peer not found")
+	}
+
+	if peer.IsAuthExpired() {
+		return nil, status.Error(codes.PermissionDenied, "peer auth expired, login again")
+	}
+
+	if req.GetEndpoint() == "" {
+		return nil, status.Error(codes.InvalidArgument, "empty endpoint")
+	}
+
+	s.controller.PeerPunchRequest(req.GetDstPeerId(), req.GetEndpoint())
+
+	return &ctrlv1.PunchResponse{}, nil
+}
+
 func (s *GRPCServer) LoginPeer(
 	ctx context.Context,
 	req *ctrlv1.LoginPeerRequest,

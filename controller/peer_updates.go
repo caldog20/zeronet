@@ -107,3 +107,21 @@ func (c *Controller) PeerForcedLogoutEvent(id uint32) {
 		pc.(chan *ctrlv1.UpdateResponse) <- update
 	}
 }
+
+func (c *Controller) PeerPunchRequest(id uint32, endpoint string) {
+	peer := c.db.GetPeerbyID(id)
+	if peer == nil {
+		return
+	}
+
+	update := &ctrlv1.UpdateResponse{
+		UpdateType:    ctrlv1.UpdateType_PUNCH,
+		PunchEndpoint: endpoint,
+	}
+
+	pc, ok := c.peerChannels.Load(id)
+	if ok {
+		pc.(chan *ctrlv1.UpdateResponse) <- update
+	}
+
+}

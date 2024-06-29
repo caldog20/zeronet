@@ -40,7 +40,7 @@ func (n *Node) Login(ctx context.Context, req *nodev1.LoginRequest) (*nodev1.Log
 		MachineId:   n.machineID,
 		PublicKey:   pubkey,
 		Hostname:    n.hostname,
-		Endpoint:    fmt.Sprintf("%s:%d", n.prefOutboundIP.String(), n.port),
+		Endpoint:    n.discoveredEndpoint,
 		AccessToken: req.GetAccessToken(),
 	}
 
