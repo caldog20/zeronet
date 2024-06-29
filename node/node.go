@@ -31,8 +31,12 @@ type Node struct {
 	id   uint32
 	ip   netip.Prefix
 
-	prefOutboundIP     netip.Addr
-	discoveredEndpoint netip.AddrPort
+	prefOutboundIP netip.Addr
+
+	// TODO Start using mutex for node fields
+	lock sync.RWMutex
+	//discoveredEndpoint netip.AddrPort
+	discoveredEndpoint string
 
 	maps struct {
 		l  sync.RWMutex
@@ -162,17 +166,19 @@ func (node *Node) Run() error {
 		return err
 	}
 
-	// Initially set endpoints
-	//err = node.SendDiscoveryRequest()
-	//if err != nil {
-	//	return err
-	//}
+	// Initially set endpoint
+	err = node.sendStunRequest()
+	if err != nil {
+		return errors.New("error sending stun request: " + err.Error())
+	}
+
+	go node.ReadUDPPackets(node.OnUDPPacket, 0)
 
 	node.StartUpdateStream(node.runCtx)
 
-	go node.ReadUDPPackets(node.OnUDPPacket, 0)
 	go node.ReadTunPackets(node.OnTunnelPacket)
 
+	go node.stunRoutine()
 	//for _, peer := range node.maps.id {
 	//	if peer.running.Load() {
 	//		peer.cancel()
@@ -233,7 +239,13 @@ func (node *Node) lookupPeer(id uint32) (*Peer, bool) {
 func (node *Node) OnUDPPacket(buffer *InboundBuffer, index int) {
 	err := buffer.header.Parse(buffer.in)
 	if err != nil {
-		log.Println(err)
+		// TODO: Possibly STUN message
+		if isStunMessage(buffer.in) {
+			node.handleStunMessage(buffer.in)
+		} else {
+			log.Println(err)
+		}
+
 		PutInboundBuffer(buffer)
 		return
 	}

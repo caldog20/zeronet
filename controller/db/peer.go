@@ -47,6 +47,10 @@ func (s *Store) SetPeerConnected(peer *types.Peer, connected bool) error {
 	return s.db.Model(peer).Update("connected", connected).Error
 }
 
+func (s *Store) UpdatePeerEndpoint(id uint32, endpoint string) error {
+	return s.db.Model(&types.Peer{ID: id}).Update("endpoint", endpoint).Error
+}
+
 func (s *Store) UpdatePeer(peer *types.Peer) error {
 	return s.db.Updates(peer).Error
 }

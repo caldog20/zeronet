@@ -38,6 +38,13 @@ func (c *ControllerClient) Close() error {
 	return c.conn.Close()
 }
 
+func (c *ControllerClient) UpdateEndpoint(id string, endpoint string) {
+	_, err := c.client.UpdateEndpoint(context.Background(), &controllerv1.UpdateEndpointRequest{MachineId: id, Endpoint: endpoint})
+	if err != nil {
+		log.Printf("error updating endpoint: %v", err)
+	}
+}
+
 //func (node *Node) Login() error {
 //	node.noise.l.Lock()
 //	defer node.noise.l.Unlock()
@@ -115,7 +122,7 @@ func (node *Node) StartUpdateStream(ctx context.Context) {
 						return
 					}
 					log.Printf("error receiving stream update response: %v", err)
-					continue
+					return
 				}
 				node.HandleUpdate(response)
 			}

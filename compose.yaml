@@ -16,6 +16,12 @@ services:
       OPENID_AUDIENCE: ${OPENID_AUDIENCE}
       OPENID_CALLBACK_URL: ${OPENID_CALLBACK_URL}
 
+  dashboard:
+    container_name: zeronet-dashboard
+    build:
+      context: .
+      dockerfile:
+
   # node:
   #   privileged: true
   #   build:

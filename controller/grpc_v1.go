@@ -29,6 +29,33 @@ func (s *GRPCServer) GetPKCEAuthInfo(
 	return s.tokenValidator.GetPKCEAuthInfo(), nil
 }
 
+func (s *GRPCServer) UpdateEndpoint(ctx context.Context, req *ctrlv1.UpdateEndpointRequest) (*ctrlv1.UpdateEndpointResponse, error) {
+	if !validateMachineID(req.GetMachineId()) {
+		log.Debugf("invalid or no machine id in request. got: %s", req.GetMachineId())
+		return nil, status.Error(codes.InvalidArgument, "invalid machine ID")
+	}
+
+	peer := s.controller.db.GetPeerByMachineID(req.GetMachineId())
+	if peer == nil {
+		return nil, status.Error(codes.NotFound, "peer not found")
+	}
+
+	if peer.IsAuthExpired() {
+		return nil, status.Error(codes.PermissionDenied, "peer auth expired, login again")
+	}
+
+	if req.GetEndpoint() == "" {
+		return nil, status.Error(codes.InvalidArgument, "empty endpoint")
+	}
+
+	err := s.controller.db.UpdatePeerEndpoint(peer.ID, req.GetEndpoint())
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to update endpoint")
+	}
+
+	return &ctrlv1.UpdateEndpointResponse{}, nil
+}
+
 func (s *GRPCServer) LoginPeer(
 	ctx context.Context,
 	req *ctrlv1.LoginPeerRequest,

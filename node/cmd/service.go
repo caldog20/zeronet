@@ -91,7 +91,7 @@ func NewStartCommand() *cobra.Command {
 	cmd.PersistentFlags().
 		StringVar(&controller, "controller", "127.0.0.1:50000", "controller address in <ip:port> format")
 	cmd.PersistentFlags().
-		Uint16Var(&port, "port", 45123, "listen port for udp socket - defaults to 0 for randomly selected port")
+		Uint16Var(&port, "port", 0, "listen port for udp socket - defaults to 0 for randomly selected port")
 	return cmd
 }
 
@@ -192,7 +192,7 @@ func NewRunCommand() *cobra.Command {
 	cmd.PersistentFlags().
 		StringVar(&controller, "controller", "127.0.0.1:50000", "controller address in <ip:port> format")
 	cmd.PersistentFlags().
-		Uint16Var(&port, "port", 45123, "listen port for udp socket - defaults to 0 for randomly selected port")
+		Uint16Var(&port, "port", 0, "listen port for udp socket - defaults to 0 for randomly selected port")
 
 	return cmd
 }

@@ -25,6 +25,7 @@ service ControllerService {
   }
 
   rpc UpdateStream(UpdateRequest) returns (stream UpdateResponse) {}
+  rpc UpdateEndpoint(UpdateEndpointRequest) returns (UpdateEndpointResponse) {}
 }
 
 message LoginPeerRequest {
