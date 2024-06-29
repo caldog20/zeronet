@@ -201,14 +201,14 @@ func (s *GRPCServer) GetPeers(
 	req *ctrlv1.GetPeersRequest,
 ) (*ctrlv1.GetPeersResponse, error) {
 
-	//token, err := extractTokenMetadata(ctx)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//_, err = s.validateAccessToken(token)
-	//if err != nil {
-	//	return nil, err
-	//}
+	token, err := extractTokenMetadata(ctx)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.validateAccessToken(token)
+	if err != nil {
+		return nil, err
+	}
 
 	peers, err := s.controller.db.GetPeers()
 	if err != nil {
@@ -228,17 +228,17 @@ func (s *GRPCServer) DeletePeer(
 	req *ctrlv1.DeletePeerRequest,
 ) (*ctrlv1.DeletePeerResponse, error) {
 
-	//token, err := extractTokenMetadata(ctx)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//_, err = s.validateAccessToken(token)
-	//if err != nil {
-	//	return nil, err
-	//}
+	token, err := extractTokenMetadata(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	err := s.controller.DeletePeer(req.GetPeerId())
+	_, err = s.validateAccessToken(token)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.controller.DeletePeer(req.GetPeerId())
 	if err != nil {
 		// TODO: Fix this
 		if err.Error() == "peer doesn't exist" {
