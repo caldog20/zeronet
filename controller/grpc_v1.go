@@ -36,8 +36,17 @@ func (s *GRPCServer) UpdateEndpoint(ctx context.Context, req *ctrlv1.UpdateEndpo
 	}
 
 	peer := s.controller.db.GetPeerByMachineID(req.GetMachineId())
+
 	if peer == nil {
 		return nil, status.Error(codes.NotFound, "peer not found")
+	}
+
+	if peer.IsDisabled() {
+		return nil, status.Error(codes.Internal, "peer is currently disabled")
+	}
+
+	if !peer.IsLoggedIn() {
+		return nil, status.Error(codes.Internal, "peer requires login first")
 	}
 
 	if peer.IsAuthExpired() {
@@ -64,6 +73,14 @@ func (s *GRPCServer) Punch(ctx context.Context, req *ctrlv1.PunchRequest) (*ctrl
 	peer := s.controller.db.GetPeerByMachineID(req.GetMachineId())
 	if peer == nil {
 		return nil, status.Error(codes.NotFound, "peer not found")
+	}
+
+	if peer.IsDisabled() {
+		return nil, status.Error(codes.Internal, "peer is currently disabled")
+	}
+
+	if !peer.IsLoggedIn() {
+		return nil, status.Error(codes.Internal, "peer requires login first")
 	}
 
 	if peer.IsAuthExpired() {
@@ -95,7 +112,10 @@ func (s *GRPCServer) LoginPeer(
 	peer = s.controller.db.GetPeerByMachineID(req.GetMachineId())
 	if peer != nil {
 		// Peer already registered, validate and log in
-
+		if peer.Disabled {
+			log.Debugf("peer %s is disabled", peer.MachineID)
+			return nil, status.Error(codes.PermissionDenied, "peer is disabled")
+		}
 		// Check peer auth hasn't expired
 		if peer.IsAuthExpired() {
 			log.Debugf("peer %s auth is expired", peer.MachineID)
@@ -159,9 +179,11 @@ func (s *GRPCServer) UpdateStream(req *ctrlv1.UpdateRequest, stream ctrlv1.Contr
 		return status.Error(codes.Internal, "peer is currently disabled")
 	}
 
-	// if !peer.IsLoggedIn() {
-	// 	return status.Error(codes.Internal, "peer requires login first")
-	// }
+	if !peer.IsLoggedIn() {
+		return status.Error(codes.Internal, "peer requires login first")
+	}
+
+	log.Printf("peer %d connected to update stream", peer.ID)
 
 	err := s.controller.db.SetPeerConnected(peer, true)
 	if err != nil {
