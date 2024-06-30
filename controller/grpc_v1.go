@@ -241,19 +241,36 @@ func (s *GRPCServer) UpdateStream(req *ctrlv1.UpdateRequest, stream ctrlv1.Contr
 // //////////////////////////////
 // GRPC Gateway API Methods
 // //////////////////////////////
+// TODO Should check if user is admin otherwise only return peers user has registered
+// Part of plan to add scopes/permissions
+func (s *GRPCServer) GetPeer(ctx context.Context, req *ctrlv1.GetPeerRequest) (*ctrlv1.GetPeerResponse, error) {
+	if req.GetPeerId() == 0 {
+		return nil, status.Error(codes.InvalidArgument, "invalid peer id")
+	}
+
+	peer := s.controller.db.GetPeerbyID(req.GetPeerId())
+	if peer == nil {
+		return nil, status.Error(codes.NotFound, "peer not found")
+	}
+
+	return &ctrlv1.GetPeerResponse{
+		Peer: peer.ProtoDetails(),
+	}, nil
+}
+
 func (s *GRPCServer) GetPeers(
 	ctx context.Context,
 	req *ctrlv1.GetPeersRequest,
 ) (*ctrlv1.GetPeersResponse, error) {
 
-	token, err := extractTokenMetadata(ctx)
-	if err != nil {
-		return nil, err
-	}
-	_, err = s.validateAccessToken(token)
-	if err != nil {
-		return nil, err
-	}
+	//token, err := extractTokenMetadata(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//_, err = s.validateAccessToken(token)
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	peers, err := s.controller.db.GetPeers()
 	if err != nil {
@@ -273,17 +290,17 @@ func (s *GRPCServer) DeletePeer(
 	req *ctrlv1.DeletePeerRequest,
 ) (*ctrlv1.DeletePeerResponse, error) {
 
-	token, err := extractTokenMetadata(ctx)
-	if err != nil {
-		return nil, err
-	}
+	//token, err := extractTokenMetadata(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//_, err = s.validateAccessToken(token)
+	//if err != nil {
+	//	return nil, err
+	//}
 
-	_, err = s.validateAccessToken(token)
-	if err != nil {
-		return nil, err
-	}
-
-	err = s.controller.DeletePeer(req.GetPeerId())
+	err := s.controller.DeletePeer(req.GetPeerId())
 	if err != nil {
 		// TODO: Fix this
 		if err.Error() == "peer doesn't exist" {

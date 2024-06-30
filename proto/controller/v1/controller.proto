@@ -13,16 +13,24 @@ service ControllerService {
   rpc GetPKCEAuthInfo(GetPKCEAuthInfoRequest)
       returns (GetPKCEAuthInfoResponse) {}
 
+  rpc GetPeer(GetPeerRequest) returns (GetPeerResponse) {
+    option (google.api.http) = {
+      get : "/api/v1/peers/{peer_id}",
+    };
+  }
+
   rpc GetPeers(GetPeersRequest) returns (GetPeersResponse) {
     option (google.api.http) = {
       get : "/api/v1/peers",
     };
   }
+
   rpc DeletePeer(DeletePeerRequest) returns (DeletePeerResponse) {
     option (google.api.http) = {
       delete : "/api/v1/peers/{peer_id}"
     };
   }
+
 
   rpc UpdateStream(UpdateRequest) returns (stream UpdateResponse) {}
   rpc UpdateEndpoint(UpdateEndpointRequest) returns (UpdateEndpointResponse) {}
@@ -41,10 +49,12 @@ message LoginPeerResponse { PeerConfig config = 1; }
 
 // TODO: Move to different proto file after testing
 
-message GetPeersRequest {}
+message GetPeerRequest {uint32 peer_id = 1;}
+message GetPeerResponse { PeerDetails peer = 1; }
 
+
+message GetPeersRequest {}
 message GetPeersResponse { repeated PeerDetails peers = 1; }
 
 message DeletePeerRequest { uint32 peer_id = 1; }
-
 message DeletePeerResponse {}
