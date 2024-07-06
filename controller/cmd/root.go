@@ -73,12 +73,17 @@ var (
 
 			ctrl := controller.NewController(db, pfix)
 
-			tokenValidator, err := auth.NewTokenValidator(ctx)
-			if err != nil {
-				log.Fatalf("error creating token validator: %s", err)
+			var tokenValidator *auth.TokenValidator = nil
+
+			if !debug {
+				tokenValidator, err = auth.NewTokenValidator(ctx)
+				if err != nil {
+					log.Fatalf("error creating token validator: %s", err)
+				}
 			}
+
 			// GRPC Server
-			grpcServer := controller.NewGRPCServer(ctrl, tokenValidator)
+			grpcServer := controller.NewGRPCServer(ctrl, tokenValidator, !debug)
 			server := grpc.NewServer(grpc.UnaryInterceptor(middleware.NewUnaryLogInterceptor()))
 			controllerv1.RegisterControllerServiceServer(server, grpcServer)
 			reflection.Register(server)

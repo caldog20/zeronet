@@ -16,10 +16,11 @@ type GRPCServer struct {
 	controller *Controller
 	ctrlv1.UnimplementedControllerServiceServer
 	tokenValidator *auth.TokenValidator
+	authEnabled    bool
 }
 
-func NewGRPCServer(controller *Controller, validator *auth.TokenValidator) *GRPCServer {
-	return &GRPCServer{controller: controller, tokenValidator: validator}
+func NewGRPCServer(controller *Controller, validator *auth.TokenValidator, enableAuth bool) *GRPCServer {
+	return &GRPCServer{controller: controller, tokenValidator: validator, authEnabled: enableAuth}
 }
 
 func (s *GRPCServer) GetPKCEAuthInfo(
@@ -263,14 +264,10 @@ func (s *GRPCServer) GetPeers(
 	req *ctrlv1.GetPeersRequest,
 ) (*ctrlv1.GetPeersResponse, error) {
 
-	//token, err := extractTokenMetadata(ctx)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//_, err = s.validateAccessToken(token)
-	//if err != nil {
-	//	return nil, err
-	//}
+	_, err := s.extractAndValidateToken(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	peers, err := s.controller.db.GetPeers()
 	if err != nil {
@@ -290,17 +287,12 @@ func (s *GRPCServer) DeletePeer(
 	req *ctrlv1.DeletePeerRequest,
 ) (*ctrlv1.DeletePeerResponse, error) {
 
-	//token, err := extractTokenMetadata(ctx)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//
-	//_, err = s.validateAccessToken(token)
-	//if err != nil {
-	//	return nil, err
-	//}
+	_, err := s.extractAndValidateToken(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	err := s.controller.DeletePeer(req.GetPeerId())
+	err = s.controller.DeletePeer(req.GetPeerId())
 	if err != nil {
 		// TODO: Fix this
 		if err.Error() == "peer doesn't exist" {
@@ -312,7 +304,28 @@ func (s *GRPCServer) DeletePeer(
 	return &ctrlv1.DeletePeerResponse{}, nil
 }
 
+func (s *GRPCServer) extractAndValidateToken(ctx context.Context) (string, error) {
+	if !s.authEnabled {
+		return "debug", nil
+	}
+	token, err := extractTokenMetadata(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	user, err := s.validateAccessToken(token)
+	if err != nil {
+		return "", err
+	}
+
+	return user, nil
+}
+
 func (s *GRPCServer) validateAccessToken(token string) (string, error) {
+	if !s.authEnabled {
+		return "debug", nil
+	}
+
 	userId, err := s.tokenValidator.ValidateAccessToken(token)
 	if err != nil {
 		return "", status.Error(
