@@ -105,7 +105,7 @@ var (
 			err = controllerv1.RegisterControllerServiceHandlerFromEndpoint(
 				egCtx,
 				mux,
-				"localhost:50000",
+				fmt.Sprintf("localhost:%d", grpcPort),
 				opts,
 			)
 
@@ -116,7 +116,7 @@ var (
 			}
 
 			gwServer := &http.Server{
-				Addr: ":8080",
+				Addr: fmt.Sprintf(":%d", httpPort),
 				Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if strings.HasPrefix(r.URL.Path, "/api") {
 						mux.ServeHTTP(w, r)
