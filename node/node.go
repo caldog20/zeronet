@@ -267,7 +267,6 @@ func (node *Node) OnUDPPacket(buffer *InboundBuffer, index int) {
 			log.Printf("[inbound] peer with index %d not found", sender)
 			return
 		}
-		buffer.peer = peer
 
 		// Callee responsible to returning buffer to pool
 		if peer.running.Load() {
@@ -283,7 +282,6 @@ func (node *Node) OnUDPPacket(buffer *InboundBuffer, index int) {
 			log.Printf("[inbound] peer with index %d not found", sender)
 			return
 		}
-		buffer.peer = peer
 
 		peer.InboundPacket(buffer)
 		return

@@ -38,7 +38,7 @@ func (node *Node) sendStunRequest() error {
 
 	_, err = node.conn.WriteToUDP(m.Raw, addr)
 
-	return nil
+	return err
 }
 
 func (node *Node) handleStunMessage(message []byte) {

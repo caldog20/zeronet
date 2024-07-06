@@ -27,33 +27,34 @@ func (peer *Peer) Inbound() {
 		if buffer == nil {
 			return
 		}
-		peer.pendingLock.RLock()
-		peer.noise.rx.SetNonce(buffer.header.Counter)
-		buffer.packet, err = peer.noise.rx.Decrypt(
-			buffer.packet[:0],
-			nil,
-			buffer.in[header.HeaderLen:buffer.size],
-		)
-		if err != nil {
-			log.Println("decrypt failed")
-			PutInboundBuffer(buffer)
-			peer.pendingLock.RUnlock()
-			continue
-		}
 
-		peer.pendingLock.RUnlock()
+		func() {
+			peer.pendingLock.RLock()
+			defer peer.pendingLock.RUnlock()
+			defer PutInboundBuffer(buffer)
 
-		peer.timers.receivedPacket.Reset(TimerRxTimeout)
+			peer.noise.rx.SetNonce(buffer.header.Counter)
+			buffer.packet, err = peer.noise.rx.Decrypt(
+				buffer.packet[:0],
+				nil,
+				buffer.in[header.HeaderLen:buffer.size],
+			)
+			if err != nil {
+				log.Println("decrypt failed")
+				return
+			}
 
-		if len(buffer.packet) > 0 {
-			// TODO: Check source IP here and ensure it matches peer's Ip
-			// Firewall implementation
-			peer.node.tun.Write(buffer.packet)
-		}
+			peer.timers.receivedPacket.Reset(TimerRxTimeout)
 
-		peer.UpdateEndpoint(buffer.raddr)
+			if len(buffer.packet) > 0 {
+				// TODO: Check source IP here and ensure it matches peer's Ip
+				// Firewall implementation
+				peer.node.tun.Write(buffer.packet)
+			}
 
-		PutInboundBuffer(buffer)
+			peer.UpdateEndpoint(buffer.raddr)
+
+		}()
 	}
 }
 
@@ -64,43 +65,45 @@ func (peer *Peer) Outbound() {
 		if buffer == nil {
 			return
 		}
+		func() {
+			peer.pendingLock.RLock()
+			defer peer.pendingLock.RUnlock()
+			defer PutOutboundBuffer(buffer)
 
-		peer.pendingLock.RLock()
-		out, err := buffer.header.Encode(
-			buffer.out,
-			header.Data,
-			peer.node.id,
-			peer.noise.tx.Nonce(),
-		)
-		out, err = peer.noise.tx.Encrypt(out, nil, buffer.packet[:buffer.size])
-		if err != nil {
-			log.Println("encrypt failed")
-			PutOutboundBuffer(buffer)
-			peer.pendingLock.RUnlock()
-			continue
-		}
+			out, err := buffer.header.Encode(
+				buffer.out,
+				header.Data,
+				peer.node.id,
+				peer.noise.tx.Nonce(),
+			)
+			if err != nil {
+				log.Println("encoding header failed")
+				return
+			}
+			out, err = peer.noise.tx.Encrypt(out, nil, buffer.packet[:buffer.size])
+			if err != nil {
+				log.Println("encrypt failed")
+				return
+			}
 
-		peer.timers.keepalive.Reset(TimerKeepalive)
-		// peer.timers.sentPacket.Stop()
-		// peer.timers.sentPacket.Reset(TimerKeepalive)
+			peer.timers.keepalive.Reset(TimerKeepalive)
+			// peer.timers.sentPacket.Stop()
+			// peer.timers.sentPacket.Reset(TimerKeepalive)
 
-		peer.pendingLock.RUnlock()
-		// To protect endpoint changes
-		peer.mu.RLock()
-		peer.node.conn.WriteToUDP(out, peer.raddr)
-		peer.mu.RUnlock()
-		// log.Printf("Sent data to %s - len: %d", p.remote.String(), elem.size)
-		PutOutboundBuffer(buffer)
+			peer.mu.RLock()
+			peer.node.conn.WriteToUDP(out, peer.raddr)
+			peer.mu.RUnlock()
+		}()
 	}
 }
 
 func (peer *Peer) UpdateEndpoint(addr *net.UDPAddr) {
 	peer.mu.RLock()
-	var paddr *net.UDPAddr
-	paddr = peer.raddr
+	curIp := peer.raddr.IP
+	curPort := peer.raddr.Port
 	peer.mu.RUnlock()
 
-	if !paddr.IP.Equal(addr.IP) || paddr.Port != addr.Port {
+	if !curIp.Equal(addr.IP) || curPort != addr.Port {
 		peer.mu.Lock()
 		log.Printf("Updating peer remote address")
 		// copy values here?
@@ -325,7 +328,6 @@ func (peer *Peer) TXTimeout() {
 		log.Printf("peer %d sending keepalive", peer.ID)
 		// Queue up empty packet
 		buffer := GetOutboundBuffer()
-		buffer.peer = peer
 		peer.outbound <- buffer
 	}
 }

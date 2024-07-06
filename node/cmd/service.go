@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"runtime"
 	"time"
 
 	"github.com/caldog20/zeronet/node"
@@ -31,9 +30,6 @@ type program struct {
 }
 
 func (p *program) Start(s service.Service) error {
-	cpus := runtime.NumCPU()
-	runtime.GOMAXPROCS(cpus)
-
 	node, err := node.NewNode(controller, port)
 	if err != nil {
 		log.Fatal(err)

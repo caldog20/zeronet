@@ -18,7 +18,7 @@ type InboundBuffer struct {
 	raddr  *net.UDPAddr   // Remote Address of packet
 	size   int            // size of data read from UDP socket
 	header *header.Header // preallocated header
-	peer   *Peer          // Peer this index belongs to
+	//peer   *Peer          // Peer this index belongs to
 }
 
 type OutboundBuffer struct {
@@ -26,7 +26,7 @@ type OutboundBuffer struct {
 	packet []byte         // For tunnel inbound data
 	size   int            // size of data read from tunnel interface
 	header *header.Header // preallocated header
-	peer   *Peer          // Peer this index belongs to
+	//peer   *Peer          // Peer this index belongs to
 }
 
 var (
@@ -43,7 +43,7 @@ func NewInboundBuffer() interface{} {
 	buffer.raddr = nil
 	buffer.size = 0
 	buffer.header = header.NewHeader()
-	buffer.peer = nil
+	//buffer.peer = nil
 
 	//log.Println("NewInboundBuffer")
 	return buffer
@@ -60,7 +60,7 @@ func PutInboundBuffer(buffer *InboundBuffer) {
 	buffer.raddr = nil
 	buffer.size = 0
 	buffer.header.Reset()
-	buffer.peer = nil
+	//buffer.peer = nil
 
 	InboundBuffers.Put(buffer)
 	IBuffersInUse.Add(^uint64(0))
@@ -72,7 +72,7 @@ func NewOutboundBuffer() interface{} {
 	buffer.packet = make([]byte, BufferSize)
 	buffer.size = 0
 	buffer.header = header.NewHeader()
-	buffer.peer = nil
+	//buffer.peer = nil
 
 	//log.Println("NewOutboundBuffer")
 	return buffer
@@ -87,7 +87,7 @@ func PutOutboundBuffer(buffer *OutboundBuffer) {
 	clear(buffer.out)
 	clear(buffer.packet)
 	buffer.size = 0
-	buffer.peer = nil
+	//buffer.peer = nil
 	buffer.header.Reset()
 
 	OutboundBuffers.Put(buffer)
