@@ -114,7 +114,7 @@ var (
 			if err != nil {
 				log.Fatal(err)
 			}
-
+			log.Printf("starting grpc http proxy server on port: %d", httpPort)
 			gwServer := &http.Server{
 				Addr: fmt.Sprintf(":%d", httpPort),
 				Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
