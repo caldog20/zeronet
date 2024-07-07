@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/caldog20/machineid"
-	conn "github.com/caldog20/zeronet/node/conn"
-	tun "github.com/caldog20/zeronet/node/tun"
+	"github.com/caldog20/zeronet/node/conn"
+	"github.com/caldog20/zeronet/node/tun"
 	"github.com/caldog20/zeronet/pkg/header"
 	nodev1 "github.com/caldog20/zeronet/proto/gen/node/v1"
 	"github.com/flynn/noise"
@@ -31,8 +31,6 @@ type Node struct {
 	tun  tun.Tun
 	id   uint32
 	ip   netip.Prefix
-
-	prefOutboundIP netip.Addr
 
 	// TODO Start using mutex for node fields
 	lock sync.RWMutex
@@ -108,12 +106,6 @@ func NewNode(controller string, port uint16) (*Node, error) {
 		return nil, err
 	}
 
-	// TODO: Temporary until stun client
-	node.prefOutboundIP, err = GetPreferredOutboundAddr()
-	if err != nil {
-		log.Println("error getting preferred outbound address: " + err.Error())
-	}
-
 	return node, nil
 }
 
@@ -129,6 +121,10 @@ func (n *Node) Start() error {
 	if running {
 		return fmt.Errorf("node is already running")
 	}
+
+	// TODO SO_REUSEPORT is a pipedream on mac
+	// Linux kernel does provide load balancing on each opened fd
+	// under SO_REUSEPORT but darwin doesn't so far
 
 	n.conn, err = conn.NewConn(n.port)
 	if err != nil {
