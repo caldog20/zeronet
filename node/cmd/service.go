@@ -25,22 +25,22 @@ var (
 type program struct {
 	node   *node.Node
 	server *grpc.Server
-	done   chan struct{}
-	conn   net.Listener
+	//done   chan struct{}
+	conn net.Listener
 }
 
 func (p *program) Start(s service.Service) error {
-	node, err := node.NewNode(controller, port)
+	n, err := node.NewNode(controller, port)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	server := grpc.NewServer()
-	nodev1.RegisterNodeServiceServer(server, node)
+	nodev1.RegisterNodeServiceServer(server, n)
 
 	p.server = server
-	p.node = node
-	p.done = make(chan struct{})
+	p.node = n
+	//p.done = make(chan struct{})
 
 	go p.run()
 	return nil

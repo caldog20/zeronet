@@ -20,6 +20,8 @@ import (
 	"github.com/caldog20/zeronet/pkg/header"
 	nodev1 "github.com/caldog20/zeronet/proto/gen/node/v1"
 	"github.com/flynn/noise"
+	"github.com/pion/ice/v3"
+	"github.com/pion/stun/v2"
 	"golang.org/x/net/ipv4"
 )
 
@@ -27,10 +29,11 @@ import (
 // TODO: Handle logged in state and when to refresh
 // TODO: Handle logged in state after running 'down' command
 type Node struct {
-	conn *conn.Conn // This will change to multiple conns in future
-	tun  tun.Tun
-	id   uint32
-	ip   netip.Prefix
+	udpMux *ice.UniversalUDPMuxDefault
+	conn   *conn.Conn // This will change to multiple conns in future
+	tun    tun.Tun
+	id     uint32
+	ip     netip.Prefix
 
 	// TODO Start using mutex for node fields
 	lock sync.RWMutex
@@ -61,6 +64,7 @@ type Node struct {
 	machineID string
 	hostname  string
 	loggedIn  atomic.Bool
+	stunUrls  []*stun.URI
 }
 
 func NewNode(controller string, port uint16) (*Node, error) {
@@ -106,6 +110,14 @@ func NewNode(controller string, port uint16) (*Node, error) {
 		return nil, err
 	}
 
+	// TODO make this configurable
+	node.parseStunUrls(
+		"stun:stun.l.google.com:19302",
+		"stun:stun1.l.google.com:19302",
+		"stun:stun.services.mozilla.com:3478",
+		"stun:stun.siptraffic.com:3478",
+	)
+
 	return node, nil
 }
 
@@ -131,6 +143,12 @@ func (n *Node) Start() error {
 		return err
 	}
 
+	n.udpMux = ice.NewUniversalUDPMuxDefault(ice.UniversalUDPMuxParams{
+		Logger:                nil,
+		UDPConn:               n.conn.GetConn(),
+		XORMappedAddrCacheTTL: time.Second * 20,
+	})
+
 	// Create local tunnel interface
 	n.tun, err = tun.NewTun()
 	if err != nil {
@@ -142,6 +160,7 @@ func (n *Node) Start() error {
 
 	err = n.Run()
 	if err != nil {
+		n.udpMux.Close()
 		n.conn.Close()
 		n.tun.Close()
 		// Invalidate context since not running
@@ -157,28 +176,29 @@ func (node *Node) Run() error {
 		return fmt.Errorf("node connections have not been initialized")
 	}
 
+	if node.udpMux.IsClosed() {
+		return fmt.Errorf("node udp mux is closed")
+	}
+
 	// Configure tunnel ip/routes
 	err := node.tun.ConfigureIPAddress(node.ip)
 	if err != nil {
 		return err
 	}
 
-	// Initially set endpoint
-	err = node.sendStunRequest()
-	if err != nil {
-		return errors.New("error sending stun request: " + err.Error())
-	}
+	//// Initially set endpoint
+	//err = node.sendStunRequest()
+	//if err != nil {
+	//	return errors.New("error sending stun request: " + err.Error())
+	//}
 
-	go node.ReadUDPPackets(node.OnUDPPacket, 0)
-
-	// Sleep for 5 seconds to get initial stun response
-	time.Sleep(time.Second * 5)
+	//go node.ReadUDPPackets(node.OnUDPPacket, 0)
 
 	node.StartUpdateStream(node.runCtx)
 
 	go node.ReadTunPackets(node.OnTunnelPacket)
 
-	go node.stunRoutine()
+	//go node.stunRoutine()
 	//for _, peer := range node.maps.id {
 	//	if peer.running.Load() {
 	//		peer.cancel()
@@ -201,6 +221,7 @@ func (node *Node) Stop() error {
 
 	node.StopAllPeers()
 	node.runCancel()
+	node.udpMux.Close()
 	node.conn.Close()
 	node.tun.Close()
 
@@ -337,4 +358,28 @@ func (node *Node) OnTunnelPacket(buffer *OutboundBuffer) {
 	peer.OutboundPacket(buffer)
 
 	return
+}
+
+func (node *Node) getAgentConfig() *ice.AgentConfig {
+	return &ice.AgentConfig{
+		UDPMux:       node.udpMux.UDPMuxDefault,
+		UDPMuxSrflx:  node.udpMux,
+		NetworkTypes: []ice.NetworkType{ice.NetworkTypeUDP4},
+		Urls:         node.stunUrls,
+	}
+}
+
+func (node *Node) parseStunUrls(urls ...string) {
+	var stunUrls []*stun.URI
+
+	for _, u := range urls {
+		parsed, err := stun.ParseURI(u)
+		if err != nil {
+			log.Printf("failed to parse stun uri: %s", u)
+			continue
+		}
+		stunUrls = append(stunUrls, parsed)
+	}
+
+	node.stunUrls = stunUrls
 }

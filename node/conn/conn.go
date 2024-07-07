@@ -13,6 +13,10 @@ type Conn struct {
 	uc *net.UDPConn
 }
 
+func (conn *Conn) GetConn() *net.UDPConn {
+	return conn.uc
+}
+
 func (conn *Conn) WriteToUDP(b []byte, addr *net.UDPAddr) (int, error) {
 	n, err := conn.uc.WriteToUDP(b, addr)
 	return n, err
