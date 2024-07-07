@@ -13,7 +13,9 @@ import (
 	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -124,8 +126,21 @@ func NewUpCommand() *cobra.Command {
 
 			up, err := client.Up(context.Background(), &nodev1.UpRequest{})
 			if err != nil {
-				log.Fatal(err)
+				st, ok := status.FromError(err)
+				if !ok {
+					log.Fatal(err)
+				}
+				if st.Code() == codes.PermissionDenied {
+					if err := login(); err != nil {
+						log.Fatal(err)
+					}
+					up, err = client.Up(context.Background(), &nodev1.UpRequest{})
+					if err != nil {
+						log.Fatal(err)
+					}
+				}
 			}
+
 			log.Println(up.GetStatus())
 		},
 	}
@@ -133,37 +148,44 @@ func NewUpCommand() *cobra.Command {
 	return cmd
 }
 
+func login() error {
+	dialCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	conn, err := grpc.DialContext(dialCtx, "127.0.0.1:55000", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	client := nodev1.NewNodeServiceClient(conn)
+
+	login, err := client.Login(context.Background(), &nodev1.LoginRequest{AccessToken: ""})
+	if err != nil {
+		return err
+	}
+
+	st := login.GetStatus()
+	if st == "login successful" {
+		log.Println("node login successful")
+	} else if st == "need access token" {
+		token, err := node.AuthFlow(login)
+		if err != nil {
+			return err
+		}
+		login, err = client.Login(context.Background(), &nodev1.LoginRequest{AccessToken: token})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func NewLoginCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "login",
 		Run: func(cmd *cobra.Command, args []string) {
-			dialCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-			defer cancel()
-			conn, err := grpc.DialContext(dialCtx, "127.0.0.1:55000", grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
+			if err := login(); err != nil {
 				log.Fatal(err)
-			}
-
-			client := nodev1.NewNodeServiceClient(conn)
-
-			login, err := client.Login(context.Background(), &nodev1.LoginRequest{AccessToken: ""})
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			status := login.GetStatus()
-			if status == "login successful" {
-				log.Println("node login successful")
-			} else if status == "need access token" {
-				token, err := node.AuthFlow(login)
-				if err != nil {
-					log.Fatal(err)
-				}
-				login, err = client.Login(context.Background(), &nodev1.LoginRequest{AccessToken: token})
-				if err != nil {
-					log.Fatal(err)
-				}
 			}
 		},
 	}

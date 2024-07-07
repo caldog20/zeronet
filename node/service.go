@@ -16,7 +16,10 @@ import (
 
 func (n *Node) Up(ctx context.Context, req *nodev1.UpRequest) (*nodev1.UpResponse, error) {
 	if err := n.Start(); err != nil {
-		return nil, err
+		if err.Error() == "node is not logged in" {
+			return nil, status.Error(codes.PermissionDenied, "node is not logged in")
+		}
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	return &nodev1.UpResponse{Status: "node is running"}, nil

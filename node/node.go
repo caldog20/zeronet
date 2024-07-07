@@ -126,7 +126,7 @@ func (n *Node) Start() error {
 
 	loggedIn := n.loggedIn.Load()
 	if !loggedIn {
-		return fmt.Errorf("node has not been logged in")
+		return errors.New("node is not logged in")
 	}
 
 	running := n.running.Load()
