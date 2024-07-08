@@ -196,6 +196,7 @@ func (peer *Peer) OutboundPacket(buffer *OutboundBuffer) {
 }
 
 func (peer *Peer) InitiateConnection() {
+	log.Println("Initiating connection")
 	peer.connecting.Store(true)
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
@@ -210,6 +211,7 @@ func (peer *Peer) InitiateConnection() {
 		peer.node.sendPeerIceOffer(peer.ID, localUfrag, localPwd)
 		rUfrag := <-peer.iceCreds
 		rPwd := <-peer.iceCreds
+		log.Println("received creds ", rUfrag, rPwd)
 
 		if err = peer.agent.GatherCandidates(); err != nil {
 			log.Println("error gathering candidates: ", err)
@@ -226,6 +228,9 @@ func (peer *Peer) InitiateConnection() {
 }
 
 func (peer *Peer) RespondConnection(ufrag, pwd string) {
+	if peer.inTransport.Load() {
+		return
+	}
 	peer.connecting.Store(true)
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
