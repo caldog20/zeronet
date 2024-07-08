@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 	"log"
-	"net"
 	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	proto "github.com/caldog20/zeronet/proto/gen/controller/v1"
-	"github.com/flynn/noise"
+	"github.com/pion/ice/v3"
 )
 
 const (
@@ -32,66 +31,31 @@ type Peer struct {
 	mu          sync.RWMutex
 	pendingLock sync.RWMutex
 	Hostname    string
-	raddr       *net.UDPAddr // Change later to list of endpoints and track active
 
-	node *Node // Pointer back to node for stuff
-	IP   netip.Addr
-	ID   uint32
+	agent *ice.Agent
+	conn  *ice.Conn
+	node  *Node // Pointer back to node for stuff
+	IP    netip.Addr
+	ID    uint32
 
-	noise struct { // Needs it's own lock
-		hs        *noise.HandshakeState
-		rx        *noise.CipherState
-		tx        *noise.CipherState
-		state     atomic.Uint64
-		initiator bool
-		pubkey    []byte
-		txNonce   atomic.Uint64
-	}
-
-	timers struct {
-		handshakeSent  *time.Timer
-		receivedPacket *time.Timer
-		keepalive      *time.Timer
-		// sentPacket *time.Timer
-	}
-
-	counters struct {
-		handshakeRetries atomic.Uint64
-	}
-
-	inbound    chan *InboundBuffer
-	outbound   chan *OutboundBuffer
-	handshakes chan *InboundBuffer
+	outbound      chan *OutboundBuffer
+	iceCreds      chan string
+	iceCandidates chan ice.Candidate
 
 	running     atomic.Bool
 	inTransport atomic.Bool
+	connecting  atomic.Bool
 
-	wg     sync.WaitGroup
-	ctx    context.Context
-	cancel context.CancelFunc
+	wg sync.WaitGroup
 }
 
 func NewPeer() *Peer {
 	peer := new(Peer)
 
 	// channels
-	peer.inbound = make(chan *InboundBuffer, InboundChannelSize)      // buffered number???
-	peer.outbound = make(chan *OutboundBuffer, OutboundChannelSize)   // allow up to 64 packets to be cached/pending handshake???
-	peer.handshakes = make(chan *InboundBuffer, HandshakeChannelSize) // Handshake packet buffering???
-
-	// TODO split out into separate type with methods/callbacks
-	peer.timers.handshakeSent = time.AfterFunc(TimerHandshakeTimeout, peer.HandshakeTimeout)
-	peer.timers.handshakeSent.Stop()
-
-	peer.timers.receivedPacket = time.AfterFunc(TimerRxTimeout, peer.RXTimeout)
-	peer.timers.receivedPacket.Stop()
-
-	peer.timers.keepalive = time.AfterFunc(TimerKeepalive, peer.TXTimeout)
-	peer.timers.keepalive.Stop()
-	//
-	//peer.timers.sentPacket = time.NewTimer(TimerKeepalive)
-	//peer.timers.sentPacket.Stop()
-
+	peer.outbound = make(chan *OutboundBuffer, OutboundChannelSize) // allow up to 64 packets to be cached/pending handshake???
+	peer.iceCreds = make(chan string, 2)
+	peer.iceCandidates = make(chan ice.Candidate)
 	peer.wg = sync.WaitGroup{}
 
 	// peer.ctx, peer.cancel = context.WithCancel(context.Background())
@@ -105,9 +69,46 @@ func (node *Node) AddPeer(peerInfo *proto.Peer) (*Peer, error) {
 	peer.mu.Lock()
 	defer peer.mu.Unlock()
 
-	peer.node = node
-
 	var err error
+
+	peer.node = node
+	peer.agent, err = ice.NewAgent(node.getAgentConfig())
+
+	err = peer.agent.OnCandidate(func(c ice.Candidate) {
+		if c == nil {
+			return
+		}
+		node.sendPeerCandidate(peer.ID, c.Marshal())
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = peer.agent.OnConnectionStateChange(func(c ice.ConnectionState) {
+		switch c {
+		case ice.ConnectionStateConnected:
+			peer.connecting.Store(false)
+			peer.inTransport.Store(true)
+			peer.pendingLock.Unlock()
+			log.Printf("peer %d connected", peer.ID)
+		case ice.ConnectionStateDisconnected:
+			peer.inTransport.Store(true)
+			peer.pendingLock.Lock()
+			log.Printf("peer %d disconnected", peer.ID)
+		case ice.ConnectionStateFailed:
+			peer.connecting.Store(false)
+			log.Printf("peer %d ice connection failed", peer.ID)
+		case ice.ConnectionStateClosed:
+			log.Printf("peer %d closed agent", peer.ID)
+		case ice.ConnectionStateCompleted:
+		default:
+		}
+	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO Fix this
 	peer.ID = peerInfo.Id
@@ -116,17 +117,7 @@ func (node *Node) AddPeer(peerInfo *proto.Peer) (*Peer, error) {
 		return nil, err
 	}
 
-	peer.noise.pubkey, err = DecodeBase64Key(peerInfo.PublicKey)
-	if err != nil {
-		return nil, err
-	}
-
 	peer.Hostname = peerInfo.Hostname
-
-	peer.raddr, err = net.ResolveUDPAddr("udp4", peerInfo.Endpoint)
-	if err != nil {
-		return nil, err
-	}
 
 	// TODO Add methods to manipulate map
 	node.maps.l.Lock()
@@ -151,10 +142,9 @@ func (peer *Peer) Start() error {
 	// Lock here when starting peer so routines have to wait for handshake before trying to read data from channels
 	peer.pendingLock.Lock()
 
-	peer.wg.Add(3)
-	go peer.Inbound()
-	go peer.Outbound()
-	go peer.Handshake()
+	//peer.wg.Add(2)
+	//go peer.Inbound()
+	//go peer.Outbound()
 
 	peer.running.Store(true)
 	peer.inTransport.Store(false)
@@ -169,8 +159,6 @@ func (peer *Peer) Stop() {
 	// send nil value to kill goroutines
 	peer.mu.Lock()
 	defer peer.mu.Unlock()
-	peer.handshakes <- nil
-	peer.inbound <- nil
 	peer.outbound <- nil
 
 	// Wait until all routines are finished
@@ -183,14 +171,6 @@ func (peer *Peer) InboundPacket(buffer *InboundBuffer) {
 	if !peer.running.Load() {
 		PutInboundBuffer(buffer)
 		return
-	}
-
-	// peer.timers.receivedPacket.Stop()
-
-	select {
-	case peer.inbound <- buffer:
-	default:
-		log.Printf("peer id %d: inbound channel full", peer.ID)
 	}
 }
 
@@ -207,9 +187,67 @@ func (peer *Peer) OutboundPacket(buffer *OutboundBuffer) {
 		log.Printf("peer id %d: outbound channel full", peer.ID)
 	}
 
-	if !peer.inTransport.Load() && peer.noise.state.Load() == 0 {
-		peer.TrySendHandshake(false)
+	if !peer.inTransport.Load() && !peer.connecting.Load() {
+		peer.InitiateConnection()
 	}
+	//if !peer.inTransport.Load() && peer.noise.state.Load() == 0 {
+	//	peer.TrySendHandshake(false)
+	//}
+}
+
+func (peer *Peer) InitiateConnection() {
+	peer.connecting.Store(true)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		defer cancel()
+
+		localUfrag, localPwd, err := peer.agent.GetLocalUserCredentials()
+		if err != nil {
+			log.Println("error getting local user credentials: ", err)
+			return
+		}
+
+		peer.node.sendPeerIceOffer(peer.ID, localUfrag, localPwd)
+		rUfrag := <-peer.iceCreds
+		rPwd := <-peer.iceCreds
+
+		if err = peer.agent.GatherCandidates(); err != nil {
+			log.Println("error gathering candidates: ", err)
+			return
+		}
+
+		peer.conn, err = peer.agent.Dial(ctx, rUfrag, rPwd)
+		if err != nil {
+			log.Println("error Dialing remote peer: ", err)
+			peer.conn = nil
+			return
+		}
+	}()
+}
+
+func (peer *Peer) RespondConnection(ufrag, pwd string) {
+	peer.connecting.Store(true)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		defer cancel()
+
+		localUfrag, localPwd, err := peer.agent.GetLocalUserCredentials()
+		if err != nil {
+			log.Println("error getting local user credentials: ", err)
+			return
+		}
+		peer.node.sendPeerIceAnswer(peer.ID, localUfrag, localPwd)
+		if err = peer.agent.GatherCandidates(); err != nil {
+			log.Println("error gathering candidates: ", err)
+			return
+		}
+		peer.conn, err = peer.agent.Accept(ctx, ufrag, pwd)
+		if err != nil {
+			log.Println("error Accepting remote peer: ", err)
+			peer.conn = nil
+			return
+		}
+	}()
 }
 
 func (peer *Peer) ResetState() {
@@ -226,50 +264,7 @@ func (peer *Peer) ResetState() {
 	peer.mu.Lock()
 	defer peer.mu.Unlock()
 
-	peer.counters.handshakeRetries.Store(0)
-	peer.timers.receivedPacket.Stop()
-	peer.timers.keepalive.Stop()
-
-	peer.flushQueues()
-	peer.noise.hs = nil
-	peer.noise.rx = nil
-	peer.noise.tx = nil
-	peer.noise.initiator = false
-	peer.noise.state.Store(0)
 	peer.inTransport.Store(false)
-}
-
-// TODO Not safe for concurrent use, possibly called from different goroutines. fix with lock inside noise struct
-func (peer *Peer) InitHandshake(initiator bool) error {
-	// Lock here incase something is changing with the nodes keys
-	peer.node.noise.l.RLock()
-	defer peer.node.noise.l.RUnlock()
-
-	peer.noise.initiator = initiator
-
-	var err error
-	peer.noise.hs, err = CreateHandshake(initiator, peer.node.noise.keyPair, peer.noise.pubkey)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// TODO Fix these in the case channel is never closed
-func (peer *Peer) flushInboundQueue() {
-LOOP:
-	for {
-		select {
-		case b, ok := <-peer.inbound:
-			if !ok {
-				break LOOP
-			}
-			PutInboundBuffer(b)
-		default:
-			break LOOP
-		}
-	}
 }
 
 func (peer *Peer) flushOutboundQueue() {
@@ -285,25 +280,4 @@ LOOP:
 			break LOOP
 		}
 	}
-}
-
-func (peer *Peer) flushHandshakeQueue() {
-LOOP:
-	for {
-		select {
-		case b, ok := <-peer.handshakes:
-			if !ok {
-				break LOOP
-			}
-			PutInboundBuffer(b)
-		default:
-			break LOOP
-		}
-	}
-}
-
-func (peer *Peer) flushQueues() {
-	peer.flushHandshakeQueue()
-	peer.flushOutboundQueue()
-	peer.flushInboundQueue()
 }

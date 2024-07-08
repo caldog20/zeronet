@@ -2,19 +2,17 @@ package node
 
 import (
 	"context"
-	"crypto/subtle"
 	"errors"
+	"fmt"
 	"io"
 	"log"
-	"net"
-	"strings"
 	"time"
 
-	"github.com/caldog20/zeronet/node/conn"
-	"github.com/caldog20/zeronet/pkg/header"
 	controllerv1 "github.com/caldog20/zeronet/proto/gen/controller/v1"
+	"github.com/pion/ice/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 )
 
 type ControllerClient struct {
@@ -39,20 +37,19 @@ func (c *ControllerClient) Close() error {
 	return c.conn.Close()
 }
 
-func (c *ControllerClient) UpdateEndpoint(id string, endpoint string) {
-	_, err := c.client.UpdateEndpoint(context.Background(), &controllerv1.UpdateEndpointRequest{MachineId: id, Endpoint: endpoint})
-	if err != nil {
-		log.Printf("error updating endpoint: %v", err)
-	}
-}
+//func (c *ControllerClient) UpdateEndpoint(id string, endpoint string) {
+//	_, err := c.client.UpdateEndpoint(context.Background(), &controllerv1.UpdateEndpointRequest{MachineId: id, Endpoint: endpoint})
+//	if err != nil {
+//		log.Printf("error updating endpoint: %v", err)
+//	}
+//}
 
 // TODO: Move some of the stream logic to ControllerClient
-func (node *Node) StartUpdateStream(ctx context.Context) {
-	stream, err := node.grpcClient.client.UpdateStream(ctx, &controllerv1.UpdateRequest{
-		MachineId: node.machineID,
-	})
+func (node *Node) StartUpdateStream(ctx context.Context) error {
+	sCtx := metadata.AppendToOutgoingContext(ctx, "authorization", fmt.Sprintf("Bearer %s", node.machineID))
+	stream, err := node.grpcClient.client.UpdateStream(sCtx)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("error connecting to update stream: %v", err)
 	}
 
 	response, err := stream.Recv()
@@ -81,6 +78,30 @@ func (node *Node) StartUpdateStream(ctx context.Context) {
 			}
 		}
 	}()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				stream.CloseSend()
+				return
+			case msg, ok := <-node.outboundUpdates:
+				if !ok {
+					log.Println("outbound updates channel closed")
+					stream.CloseSend()
+					return
+				}
+				if err := stream.Send(msg); err != nil {
+					if err == io.EOF {
+						return
+					}
+					log.Printf("error sending stream update response: %v", err)
+				}
+			}
+		}
+	}()
+
+	return nil
 }
 
 func (node *Node) HandleUpdate(update *controllerv1.UpdateResponse) {
@@ -91,13 +112,74 @@ func (node *Node) HandleUpdate(update *controllerv1.UpdateResponse) {
 		node.handlePeerConnectUpdate(update)
 	case controllerv1.UpdateType_DISCONNECT:
 		//node.handlePeerDisconnectUpdate(update)
-	case controllerv1.UpdateType_PUNCH:
-		node.handlePeerPunchRequest(update)
 	case controllerv1.UpdateType_LOGOUT:
 		node.handleLogout()
+	case controllerv1.UpdateType_ICE:
+		node.handleIceUpdate(update.GetIceUpdate())
 	default:
 		log.Println("unmatched update message type")
 		return
+	}
+}
+
+func (node *Node) sendPeerCandidate(id uint32, candidate string) {
+	update := &controllerv1.UpdateRequest{
+		UpdateType: controllerv1.UpdateType_ICE,
+		IceUpdate: &controllerv1.IceUpdate{
+			UpdateType: controllerv1.IceUpdateType_CANDIDATE,
+			PeerId:     id,
+			Candidate:  candidate,
+		},
+	}
+	node.outboundUpdates <- update
+}
+
+func (node *Node) sendPeerIceOffer(id uint32, ufrag, pwd string) {
+	update := &controllerv1.UpdateRequest{
+		UpdateType: controllerv1.UpdateType_ICE,
+		IceUpdate: &controllerv1.IceUpdate{
+			UpdateType: controllerv1.IceUpdateType_OFFER,
+			PeerId:     id,
+			Ufrag:      ufrag,
+			Pwd:        pwd,
+		},
+	}
+	node.outboundUpdates <- update
+}
+
+func (node *Node) sendPeerIceAnswer(id uint32, ufrag, pwd string) {
+	update := &controllerv1.UpdateRequest{
+		UpdateType: controllerv1.UpdateType_ICE,
+		IceUpdate: &controllerv1.IceUpdate{
+			UpdateType: controllerv1.IceUpdateType_ANSWER,
+			PeerId:     id,
+			Ufrag:      ufrag,
+			Pwd:        pwd,
+		},
+	}
+	node.outboundUpdates <- update
+}
+
+func (node *Node) handleIceUpdate(update *controllerv1.IceUpdate) {
+	peer, found := node.lookupPeer(update.GetPeerId())
+	if !found {
+		log.Printf("peer %s not found for ice update", update.GetPeerId())
+		return
+	}
+
+	switch update.UpdateType {
+	case controllerv1.IceUpdateType_OFFER:
+		fallthrough
+	case controllerv1.IceUpdateType_ANSWER:
+		peer.iceCreds <- update.GetUfrag()
+		peer.iceCreds <- update.GetPwd()
+	case controllerv1.IceUpdateType_CANDIDATE:
+		cand, err := ice.UnmarshalCandidate(update.GetCandidate())
+		if err != nil {
+			log.Printf("error unmarshaling candidate: %v", err)
+			return
+		}
+		peer.iceCandidates <- cand
 	}
 }
 
@@ -109,26 +191,6 @@ func (node *Node) handleLogout() {
 		log.Println("error stopping node during logout")
 	}
 	node.loggedIn.Store(false)
-}
-
-func (node *Node) handlePeerPunchRequest(update *controllerv1.UpdateResponse) {
-	endpoint := update.GetPunchEndpoint()
-	ua, err := net.ResolveUDPAddr(conn.UDPType, endpoint)
-	if err != nil {
-		log.Printf("error parsing udp punch address: %s", err)
-		return
-	}
-	punch := make([]byte, 16)
-
-	h := header.NewHeader()
-
-	punch, err = h.Encode(punch, header.Punch, node.id, 0)
-	if err != nil {
-		log.Println("error encoding header for punch message")
-	}
-
-	node.conn.WriteToUDP(punch, ua)
-	log.Printf("sent punch message to udp address: %s", ua.String())
 }
 
 func (node *Node) handleInitialSync(update *controllerv1.UpdateResponse) {
@@ -149,14 +211,11 @@ func (node *Node) handlePeerConnectUpdate(update *controllerv1.UpdateResponse) {
 	if update.PeerList.Count < 1 {
 		return
 	}
-	if update.UpdateType != controllerv1.UpdateType_CONNECT {
-		return
-	}
 
 	rp := update.PeerList.Peers[0]
 
 	node.maps.l.RLock()
-	p, found := node.maps.id[rp.Id]
+	_, found := node.maps.id[rp.Id]
 	node.maps.l.RUnlock()
 	if !found {
 		peer, err := node.AddPeer(rp)
@@ -169,92 +228,78 @@ func (node *Node) handlePeerConnectUpdate(update *controllerv1.UpdateResponse) {
 		}
 		return
 	}
-
+	log.Println("skipping peer update TODO")
 	// Peer already found, update
-	err := p.Update(rp)
-	if err != nil {
-		panic(err)
-	}
+	//err := p.Update(rp)
+	//if err != nil {
+	//	panic(err)
+	//}
 }
 
 // // TODO Fix variable naming and compares
-func (peer *Peer) Update(info *controllerv1.Peer) error {
-	peer.mu.RLock()
-	currentEndpoint := peer.raddr.AddrPort()
-	currentKey := peer.noise.pubkey
-	currentHostname := peer.Hostname
-	currentIP := peer.IP
-	peer.mu.RUnlock()
-
-	// TODO Helper function for parsing IPs
-	newEndpoint, err := ParseAddrPort(info.Endpoint)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-
-	if CompareAddrPort(currentEndpoint, newEndpoint) != 0 {
-		peer.mu.Lock()
-		newRemote, err := net.ResolveUDPAddr(conn.UDPType, newEndpoint.String())
-		if err != nil {
-			log.Println("error updating peer endpoint udp address")
-		} else {
-			peer.raddr = newRemote
-		}
-		peer.mu.Unlock()
-	}
-
-	if strings.Compare(currentHostname, info.Hostname) != 0 {
-		peer.mu.Lock()
-		peer.Hostname = info.Hostname
-		peer.mu.Unlock()
-	}
-
-	newKey, err := DecodeBase64Key(info.PublicKey)
-	if err != nil {
-		log.Println(err)
-		//return err
-	} else {
-		if subtle.ConstantTimeCompare(currentKey, newKey) != 1 {
-			// TODO If the key has changed, we need to stop the peer and clear state,
-			// update new key and restart peer completely
-			//panic("peer key update not yet implemented")
-			peer.Stop()
-			peer.mu.Lock()
-			peer.noise.pubkey = newKey
-			peer.mu.Unlock()
-			err = peer.Start()
-			if err != nil {
-				panic(err)
-			}
-		}
-	}
-
-	newIP, err := ParseAddr(info.Ip)
-	if err != nil {
-		log.Println(err)
-		//return err
-	}
-
-	if currentIP.Compare(newIP) != 0 {
-		peer.mu.Lock()
-		peer.IP = newIP
-		peer.mu.Unlock()
-	}
-
-	return nil
-}
-
-func (node *Node) RequestPunch(id uint32) {
-	node.lock.RLock()
-	defer node.lock.RUnlock()
-	_, err := node.grpcClient.client.Punch(context.Background(), &controllerv1.PunchRequest{
-		MachineId: node.machineID,
-		DstPeerId: id,
-		Endpoint:  node.discoveredEndpoint,
-	})
-
-	if err != nil {
-		log.Printf("error requesting punch for peer id %d: %v", id, err)
-	}
-}
+//func (peer *Peer) Update(info *controllerv1.Peer) error {
+//	peer.mu.RLock()
+//	currentEndpoint := peer.raddr.AddrPort()
+//	//currentKey := peer.noise.pubkey
+//	currentHostname := peer.Hostname
+//	currentIP := peer.IP
+//	peer.mu.RUnlock()
+//
+//	// TODO Helper function for parsing IPs
+//	newEndpoint, err := ParseAddrPort(info.Endpoint)
+//	if err != nil {
+//		log.Println(err)
+//		return err
+//	}
+//
+//	if CompareAddrPort(currentEndpoint, newEndpoint) != 0 {
+//		peer.mu.Lock()
+//		newRemote, err := net.ResolveUDPAddr(conn.UDPType, newEndpoint.String())
+//		if err != nil {
+//			log.Println("error updating peer endpoint udp address")
+//		} else {
+//			peer.raddr = newRemote
+//		}
+//		peer.mu.Unlock()
+//	}
+//
+//	if strings.Compare(currentHostname, info.Hostname) != 0 {
+//		peer.mu.Lock()
+//		peer.Hostname = info.Hostname
+//		peer.mu.Unlock()
+//	}
+//
+//	newKey, err := DecodeBase64Key(info.PublicKey)
+//	if err != nil {
+//		log.Println(err)
+//		//return err
+//	} else {
+//		if subtle.ConstantTimeCompare(currentKey, newKey) != 1 {
+//			// TODO If the key has changed, we need to stop the peer and clear state,
+//			// update new key and restart peer completely
+//			//panic("peer key update not yet implemented")
+//			peer.Stop()
+//			peer.mu.Lock()
+//			peer.noise.pubkey = newKey
+//			peer.mu.Unlock()
+//			err = peer.Start()
+//			if err != nil {
+//				panic(err)
+//			}
+//		}
+//	}
+//
+//	newIP, err := ParseAddr(info.Ip)
+//	if err != nil {
+//		log.Println(err)
+//		//return err
+//	}
+//
+//	if currentIP.Compare(newIP) != 0 {
+//		peer.mu.Lock()
+//		peer.IP = newIP
+//		peer.mu.Unlock()
+//	}
+//
+//	return nil
+//}

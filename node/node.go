@@ -17,7 +17,7 @@ import (
 	"github.com/caldog20/machineid"
 	"github.com/caldog20/zeronet/node/conn"
 	"github.com/caldog20/zeronet/node/tun"
-	"github.com/caldog20/zeronet/pkg/header"
+	controllerv1 "github.com/caldog20/zeronet/proto/gen/controller/v1"
 	nodev1 "github.com/caldog20/zeronet/proto/gen/node/v1"
 	"github.com/flynn/noise"
 	"github.com/pion/ice/v3"
@@ -61,10 +61,11 @@ type Node struct {
 	runCtx    context.Context
 	runCancel context.CancelFunc
 	nodev1.UnimplementedNodeServiceServer
-	machineID string
-	hostname  string
-	loggedIn  atomic.Bool
-	stunUrls  []*stun.URI
+	machineID       string
+	hostname        string
+	loggedIn        atomic.Bool
+	stunUrls        []*stun.URI
+	outboundUpdates chan *controllerv1.UpdateRequest
 }
 
 func NewNode(controller string, port uint16) (*Node, error) {
@@ -193,9 +194,12 @@ func (node *Node) Run() error {
 	//}
 
 	//go node.ReadUDPPackets(node.OnUDPPacket, 0)
-
-	node.StartUpdateStream(node.runCtx)
-
+	node.outboundUpdates = make(chan *controllerv1.UpdateRequest, 3)
+	err = node.StartUpdateStream(node.runCtx)
+	if err != nil {
+		close(node.outboundUpdates)
+		return err
+	}
 	go node.ReadTunPackets(node.OnTunnelPacket)
 
 	//go node.stunRoutine()
@@ -226,6 +230,7 @@ func (node *Node) Stop() error {
 	node.tun.Close()
 
 	node.running.Store(false)
+	close(node.outboundUpdates)
 	//node.grpcClient.Close()
 	//node.grpcClient = nil
 	return nil
@@ -255,68 +260,6 @@ func (node *Node) lookupPeer(id uint32) (*Peer, bool) {
 	}
 
 	return peer, true
-}
-
-func (node *Node) OnUDPPacket(buffer *InboundBuffer, index int) {
-	err := buffer.header.Parse(buffer.in)
-	if err != nil {
-		// TODO: Possibly STUN message
-		if isStunMessage(buffer.in) {
-			node.handleStunMessage(buffer.in)
-		} else {
-			log.Println(err)
-		}
-
-		PutInboundBuffer(buffer)
-		return
-	}
-
-	// Lookup Peer based on index
-	sender := buffer.header.SenderIndex
-
-	// Peer found, check message type and handle accordingly
-	switch buffer.header.Type {
-	// Remote peer sent handshake message
-	case header.Handshake:
-		peer, found := node.lookupPeer(sender)
-		if !found {
-			PutInboundBuffer(buffer)
-			log.Printf("[inbound] peer with index %d not found", sender)
-			return
-		}
-
-		// Callee responsible to returning buffer to pool
-		if peer.running.Load() {
-			peer.handshakes <- buffer
-		}
-		return
-	// Remote peer sent encrypted data
-	case header.Data:
-		// Callee responsible to returning buffer to pool
-		peer, found := node.lookupPeer(sender)
-		if !found {
-			PutInboundBuffer(buffer)
-			log.Printf("[inbound] peer with index %d not found", sender)
-			return
-		}
-
-		peer.InboundPacket(buffer)
-		return
-	// Remote peer sent punch packet
-	case header.Punch:
-		log.Printf("[inbound] received punch packet from peer %d", sender)
-		PutInboundBuffer(buffer)
-		return
-	case header.Discovery:
-		// Logic to process stun/discovery responses
-		//node.HandleDiscoveryResponse(buffer)
-		PutInboundBuffer(buffer)
-		return
-	default:
-		log.Printf("[inbound] unmatched header: %s", buffer.header.String())
-		PutInboundBuffer(buffer)
-		return
-	}
 }
 
 func (node *Node) OnTunnelPacket(buffer *OutboundBuffer) {
