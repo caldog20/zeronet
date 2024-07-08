@@ -48,31 +48,41 @@ message UpdateEndpointRequest {
 
 message UpdateEndpointResponse {}
 
-message UpdateRequest { string machine_id = 1; }
-
 enum UpdateType {
   INIT = 0;
   CONNECT = 1;
   DISCONNECT = 2;
-  PUNCH = 3;
+  ICE = 3;
   LOGOUT = 4;
+}
+
+message UpdateRequest {
+  UpdateType update_type = 1;
+  string machine_id = 2;
+  IceUpdate ice_update = 3;
 }
 
 message UpdateResponse {
   UpdateType update_type = 1;
   PeerList peer_list = 2;
-  string punch_endpoint = 3;
+  IceUpdate ice_update = 3;
 }
 
-message PunchRequest {
-  string machine_id = 1;
-  uint32 dst_peer_id = 2;
-  string endpoint = 3;
+enum IceUpdateType {
+  OFFER = 0;
+  ANSWER = 1;
+  CANDIDATE = 2;
 }
 
-message PunchResponse {}
+message IceUpdate {
+  IceUpdateType update_type = 1;
+  uint32 peer_id = 2;
+  string ufrag = 3;
+  string pwd = 4;
+  string candidate = 5;
+}
 
-message PunchNotification { string endpoint = 1; }
+message Empty {}
 
 message PeerList {
   repeated Peer peers = 1;

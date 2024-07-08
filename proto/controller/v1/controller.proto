@@ -32,9 +32,7 @@ service ControllerService {
   }
 
 
-  rpc UpdateStream(UpdateRequest) returns (stream UpdateResponse) {}
-  rpc UpdateEndpoint(UpdateEndpointRequest) returns (UpdateEndpointResponse) {}
-  rpc Punch(PunchRequest) returns (PunchResponse) {}
+  rpc UpdateStream(stream UpdateRequest) returns (stream UpdateResponse) {}
 }
 
 message LoginPeerRequest {

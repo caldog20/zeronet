@@ -2,6 +2,7 @@ package controller
 
 import (
 	ctrlv1 "github.com/caldog20/zeronet/proto/gen/controller/v1"
+	log "github.com/sirupsen/logrus"
 )
 
 func (c *Controller) GetPeerUpdateChannel(id uint32) chan *ctrlv1.UpdateResponse {
@@ -108,20 +109,57 @@ func (c *Controller) PeerForcedLogoutEvent(id uint32) {
 	}
 }
 
-func (c *Controller) PeerPunchRequest(id uint32, endpoint string) {
-	peer := c.db.GetPeerbyID(id)
-	if peer == nil {
-		return
+func (c *Controller) handleUpdateRequest(reqId uint32, msg *ctrlv1.UpdateRequest) {
+	switch msg.UpdateType {
+	case ctrlv1.UpdateType_ICE:
+		c.handleIceUpdateRequest(reqId, msg.GetIceUpdate())
+	default:
+		log.Printf("unknown update request type %d from peer %d", msg.UpdateType, reqId)
 	}
+}
 
-	update := &ctrlv1.UpdateResponse{
-		UpdateType:    ctrlv1.UpdateType_PUNCH,
-		PunchEndpoint: endpoint,
+func (c *Controller) handleIceUpdateRequest(reqId uint32, msg *ctrlv1.IceUpdate) {
+	switch msg.UpdateType {
+	// Ice Offer to Send to remote peer
+	case ctrlv1.IceUpdateType_OFFER:
+		update := &ctrlv1.UpdateResponse{
+			UpdateType: ctrlv1.UpdateType_ICE,
+			IceUpdate: &ctrlv1.IceUpdate{
+				UpdateType: ctrlv1.IceUpdateType_OFFER,
+				PeerId:     reqId,
+				Ufrag:      msg.GetUfrag(),
+				Pwd:        msg.GetPwd(),
+			},
+		}
+		c.sendPeerUpdate(msg.GetPeerId(), update)
+	case ctrlv1.IceUpdateType_ANSWER:
+		update := &ctrlv1.UpdateResponse{
+			UpdateType: ctrlv1.UpdateType_ICE,
+			IceUpdate: &ctrlv1.IceUpdate{
+				UpdateType: ctrlv1.IceUpdateType_ANSWER,
+				PeerId:     reqId,
+				Ufrag:      msg.GetUfrag(),
+				Pwd:        msg.GetPwd(),
+			},
+		}
+		c.sendPeerUpdate(msg.GetPeerId(), update)
+	case ctrlv1.IceUpdateType_CANDIDATE:
+		update := &ctrlv1.UpdateResponse{
+			UpdateType: ctrlv1.UpdateType_ICE,
+			IceUpdate: &ctrlv1.IceUpdate{
+				UpdateType: ctrlv1.IceUpdateType_CANDIDATE,
+				PeerId:     reqId,
+				Candidate:  msg.GetCandidate(),
+			},
+		}
+		c.sendPeerUpdate(msg.GetPeerId(), update)
 	}
+}
 
+// TODO error checking on updates when sending on peer channel
+func (c *Controller) sendPeerUpdate(id uint32, update *ctrlv1.UpdateResponse) {
 	pc, ok := c.peerChannels.Load(id)
 	if ok {
 		pc.(chan *ctrlv1.UpdateResponse) <- update
 	}
-
 }
