@@ -254,7 +254,20 @@ func (peer *Peer) RespondConnection(ufrag, pwd string) {
 			log.Println("error getting local user credentials: ", err)
 			return
 		}
+
 		peer.node.sendPeerIceAnswer(peer.ID, localUfrag, localPwd)
+
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case c := <-peer.iceCandidates:
+					peer.agent.AddRemoteCandidate(c)
+				}
+			}
+		}()
+
 		if err = peer.agent.GatherCandidates(); err != nil {
 			log.Println("error gathering candidates: ", err)
 			return
