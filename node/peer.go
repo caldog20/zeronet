@@ -93,11 +93,12 @@ func (node *Node) AddPeer(peerInfo *proto.Peer) (*Peer, error) {
 			peer.pendingLock.Unlock()
 			log.Printf("peer %d connected", peer.ID)
 		case ice.ConnectionStateDisconnected:
-			peer.inTransport.Store(true)
+			peer.inTransport.Store(false)
 			peer.pendingLock.Lock()
 			log.Printf("peer %d disconnected", peer.ID)
 		case ice.ConnectionStateFailed:
 			peer.connecting.Store(false)
+			peer.inTransport.Store(false)
 			log.Printf("peer %d ice connection failed", peer.ID)
 		case ice.ConnectionStateClosed:
 			log.Printf("peer %d closed agent", peer.ID)
@@ -199,7 +200,7 @@ func (peer *Peer) InitiateConnection() {
 	log.Println("Initiating connection")
 	peer.connecting.Store(true)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
 		defer cancel()
 
 		localUfrag, localPwd, err := peer.agent.GetLocalUserCredentials()
@@ -217,6 +218,17 @@ func (peer *Peer) InitiateConnection() {
 			log.Println("error gathering candidates: ", err)
 			return
 		}
+
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case c := <-peer.iceCandidates:
+					peer.agent.AddRemoteCandidate(c)
+				}
+			}
+		}()
 
 		peer.conn, err = peer.agent.Dial(ctx, rUfrag, rPwd)
 		if err != nil {
