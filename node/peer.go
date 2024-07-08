@@ -228,6 +228,7 @@ func (peer *Peer) InitiateConnection() {
 }
 
 func (peer *Peer) RespondConnection(ufrag, pwd string) {
+	log.Println("Responding connection")
 	if peer.inTransport.Load() {
 		return
 	}

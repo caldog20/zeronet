@@ -170,10 +170,10 @@ func (node *Node) handleIceUpdate(update *controllerv1.IceUpdate) {
 	log.Printf("peer %s found for ice update: %v", update.GetPeerId(), update)
 
 	switch update.UpdateType {
-	case controllerv1.IceUpdateType_OFFER:
+	case controllerv1.IceUpdateType_ANSWER:
 		peer.iceCreds <- update.GetUfrag()
 		peer.iceCreds <- update.GetPwd()
-	case controllerv1.IceUpdateType_ANSWER:
+	case controllerv1.IceUpdateType_OFFER:
 		peer.RespondConnection(update.GetUfrag(), update.GetPwd())
 	case controllerv1.IceUpdateType_CANDIDATE:
 		cand, err := ice.UnmarshalCandidate(update.GetCandidate())
