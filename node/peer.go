@@ -217,7 +217,7 @@ func (peer *Peer) InitiateConnection() {
 	retry:
 		peer.connecting.Store(true)
 		attempts++
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 		defer cancel()
 
 		localUfrag, localPwd, err := peer.agent.GetLocalUserCredentials()
@@ -279,18 +279,13 @@ func (peer *Peer) RespondConnection(creds IceCreds) {
 		// Send answer back to remote peer with local creds
 		peer.node.sendPeerIceAnswer(peer.ID, localUfrag, localPwd)
 
-		if err := peer.agent.GatherCandidates(); err != nil {
+		if err = peer.agent.GatherCandidates(); err != nil {
 			log.Println("error gathering candidates: ", err)
 			return
 		}
 
 		// Async loop to add remote candidates when received
 		go peer.receiveRemoteCandidates(ctx)
-
-		if err = peer.agent.GatherCandidates(); err != nil {
-			log.Println("error gathering candidates: ", err)
-			return
-		}
 
 		peer.conn, err = peer.agent.Accept(ctx, creds.ufrag, creds.pwd)
 		if err != nil {
