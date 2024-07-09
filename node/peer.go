@@ -256,7 +256,7 @@ func (peer *Peer) InitiateConnection() {
 		}
 
 		// Async loop to add remote candidates when received
-		go peer.receiveRemoteCandidates()
+		peer.receiveRemoteCandidates()
 
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 		defer cancel()
