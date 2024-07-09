@@ -212,10 +212,10 @@ func (peer *Peer) InitiateConnection() {
 	if peer.connecting.Load() && peer.inTransport.Load() {
 		return
 	}
-	peer.connecting.Store(true)
 	go func() {
 		attempts := 0
 	retry:
+		peer.connecting.Store(true)
 		attempts++
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
 		defer cancel()
@@ -243,6 +243,7 @@ func (peer *Peer) InitiateConnection() {
 		// Block here until dialing succeeds with remote candidate pair
 		peer.conn, err = peer.agent.Dial(ctx, remoteCreds.ufrag, remoteCreds.pwd)
 		if err != nil {
+			cancel()
 			log.Println("error Dialing remote peer: ", err)
 			err = peer.agent.Restart(localUfrag, localPwd)
 			if err != nil {
@@ -293,13 +294,12 @@ func (peer *Peer) RespondConnection(creds IceCreds) {
 
 		peer.conn, err = peer.agent.Accept(ctx, creds.ufrag, creds.pwd)
 		if err != nil {
+			cancel()
 			err = peer.agent.Restart(localUfrag, localPwd)
 			if err != nil {
 				log.Printf("error restarting ice agent for peer %d", peer.ID)
-			} else {
-
+				return
 			}
-			return
 		}
 	}()
 }
