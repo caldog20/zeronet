@@ -153,6 +153,7 @@ func (c *Controller) handleIceUpdateRequest(reqId uint32, msg *ctrlv1.IceUpdate)
 			},
 		}
 		c.sendPeerUpdate(msg.GetPeerId(), update)
+	default:
 	}
 }
 

@@ -13,6 +13,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type IceCreds struct {
+	ufrag string
+	pwd   string
+}
+
 type Key struct {
 	Public  string `yaml:"PublicKey"`
 	Private string `yaml:"PrivateKey"`

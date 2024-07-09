@@ -38,9 +38,9 @@ type Peer struct {
 	IP    netip.Addr
 	ID    uint32
 
-	outbound      chan *OutboundBuffer
-	iceCreds      chan string
-	iceCandidates chan ice.Candidate
+	outbound       chan *OutboundBuffer
+	iceCredentials chan IceCreds
+	iceCandidates  chan ice.Candidate
 
 	running     atomic.Bool
 	inTransport atomic.Bool
@@ -54,7 +54,7 @@ func NewPeer() *Peer {
 
 	// channels
 	peer.outbound = make(chan *OutboundBuffer, OutboundChannelSize) // allow up to 64 packets to be cached/pending handshake???
-	peer.iceCreds = make(chan string, 2)
+	peer.iceCredentials = make(chan IceCreds, 2)
 	peer.iceCandidates = make(chan ice.Candidate)
 	peer.wg = sync.WaitGroup{}
 
@@ -87,22 +87,32 @@ func (node *Node) AddPeer(peerInfo *proto.Peer) (*Peer, error) {
 
 	err = peer.agent.OnConnectionStateChange(func(c ice.ConnectionState) {
 		switch c {
+		case ice.ConnectionStateCompleted:
+			fallthrough
 		case ice.ConnectionStateConnected:
 			peer.connecting.Store(false)
 			peer.inTransport.Store(true)
 			peer.pendingLock.Unlock()
-			log.Printf("peer %d connected", peer.ID)
+			log.Printf("peer %d connected/completed", peer.ID)
 		case ice.ConnectionStateDisconnected:
-			peer.inTransport.Store(false)
-			peer.pendingLock.Lock()
+			if peer.inTransport.Load() {
+				peer.inTransport.Store(false)
+				peer.pendingLock.Lock()
+			}
 			log.Printf("peer %d disconnected", peer.ID)
 		case ice.ConnectionStateFailed:
 			peer.connecting.Store(false)
-			peer.inTransport.Store(false)
+			if peer.inTransport.Load() {
+				peer.inTransport.Store(false)
+				peer.pendingLock.Lock()
+			}
 			log.Printf("peer %d ice connection failed", peer.ID)
 		case ice.ConnectionStateClosed:
 			log.Printf("peer %d closed agent", peer.ID)
-		case ice.ConnectionStateCompleted:
+			if peer.inTransport.Load() {
+				peer.inTransport.Store(false)
+				peer.pendingLock.Lock()
+			}
 		default:
 		}
 	})
@@ -196,10 +206,17 @@ func (peer *Peer) OutboundPacket(buffer *OutboundBuffer) {
 	//}
 }
 
+// TODO Add retries and counting
 func (peer *Peer) InitiateConnection() {
 	log.Println("Initiating connection")
+	if peer.connecting.Load() && peer.inTransport.Load() {
+		return
+	}
 	peer.connecting.Store(true)
 	go func() {
+		attempts := 0
+	retry:
+		attempts++
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*60)
 		defer cancel()
 
@@ -209,39 +226,42 @@ func (peer *Peer) InitiateConnection() {
 			return
 		}
 
+		// Send offer to remote peer with local credentials
 		peer.node.sendPeerIceOffer(peer.ID, localUfrag, localPwd)
-		rUfrag := <-peer.iceCreds
-		rPwd := <-peer.iceCreds
-		log.Println("received creds ", rUfrag, rPwd)
+
+		// Block here waiting for ice credentials from remote peer
+		remoteCreds := <-peer.iceCredentials
 
 		if err = peer.agent.GatherCandidates(); err != nil {
 			log.Println("error gathering candidates: ", err)
 			return
 		}
 
-		go func() {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case c := <-peer.iceCandidates:
-					peer.agent.AddRemoteCandidate(c)
-				}
-			}
-		}()
+		// Async loop to add remote candidates when received
+		go peer.receiveRemoteCandidates(ctx)
 
-		peer.conn, err = peer.agent.Dial(ctx, rUfrag, rPwd)
+		// Block here until dialing succeeds with remote candidate pair
+		peer.conn, err = peer.agent.Dial(ctx, remoteCreds.ufrag, remoteCreds.pwd)
 		if err != nil {
 			log.Println("error Dialing remote peer: ", err)
-			peer.conn = nil
-			return
+			err = peer.agent.Restart(localUfrag, localPwd)
+			if err != nil {
+				log.Printf("error restarting ice agent for peer %d", peer.ID)
+			} else {
+				if attempts >= 3 {
+					log.Printf("stopping after %d connection retry attempts for peer %d", attempts, peer.ID)
+					return
+				}
+				log.Printf("restarting ice agent and retrying connection for peer %d", peer.ID)
+				goto retry
+			}
 		}
 	}()
 }
 
-func (peer *Peer) RespondConnection(ufrag, pwd string) {
+func (peer *Peer) RespondConnection(creds IceCreds) {
 	log.Println("Responding connection")
-	if peer.inTransport.Load() {
+	if peer.connecting.Load() && peer.inTransport.Load() {
 		return
 	}
 	peer.connecting.Store(true)
@@ -255,30 +275,46 @@ func (peer *Peer) RespondConnection(ufrag, pwd string) {
 			return
 		}
 
+		// Send answer back to remote peer with local creds
 		peer.node.sendPeerIceAnswer(peer.ID, localUfrag, localPwd)
 
-		go func() {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case c := <-peer.iceCandidates:
-					peer.agent.AddRemoteCandidate(c)
-				}
-			}
-		}()
+		if err := peer.agent.GatherCandidates(); err != nil {
+			log.Println("error gathering candidates: ", err)
+			return
+		}
+
+		// Async loop to add remote candidates when received
+		go peer.receiveRemoteCandidates(ctx)
 
 		if err = peer.agent.GatherCandidates(); err != nil {
 			log.Println("error gathering candidates: ", err)
 			return
 		}
-		peer.conn, err = peer.agent.Accept(ctx, ufrag, pwd)
+
+		peer.conn, err = peer.agent.Accept(ctx, creds.ufrag, creds.pwd)
 		if err != nil {
-			log.Println("error Accepting remote peer: ", err)
-			peer.conn = nil
+			err = peer.agent.Restart(localUfrag, localPwd)
+			if err != nil {
+				log.Printf("error restarting ice agent for peer %d", peer.ID)
+			} else {
+
+			}
 			return
 		}
 	}()
+}
+
+func (peer *Peer) receiveRemoteCandidates(ctx context.Context) {
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case c := <-peer.iceCandidates:
+				peer.agent.AddRemoteCandidate(c)
+			}
+		}
+	}(ctx)
 }
 
 func (peer *Peer) ResetState() {
