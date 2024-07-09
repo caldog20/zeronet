@@ -178,7 +178,7 @@ func (peer *Peer) Stop() {
 	// Wait until all routines are finished
 	peer.wg.Wait()
 	log.Printf("peer %d goroutines have stopped", peer.ID)
-	peer.pendingLock.Unlock()
+	//peer.pendingLock.Unlock()
 }
 
 func (peer *Peer) InboundPacket(buffer *InboundBuffer) {
