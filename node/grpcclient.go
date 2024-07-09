@@ -45,6 +45,7 @@ func (c *ControllerClient) Close() error {
 //}
 
 // TODO: Move some of the stream logic to ControllerClient
+// TODO: Add stream reconnect mechanism
 func (node *Node) StartUpdateStream(ctx context.Context) error {
 	sCtx := metadata.AppendToOutgoingContext(ctx, "authorization", fmt.Sprintf("Bearer %s", node.machineID))
 	stream, err := node.grpcClient.client.UpdateStream(sCtx)

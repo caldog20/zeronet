@@ -217,9 +217,6 @@ func (peer *Peer) InitiateConnection() {
 	}
 	peer.connecting.Store(true)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*50)
-		defer cancel()
-
 		localUfrag, localPwd, err := peer.agent.GetLocalUserCredentials()
 		if err != nil {
 			log.Println("error getting local user credentials: ", err)
@@ -229,22 +226,28 @@ func (peer *Peer) InitiateConnection() {
 
 		var remoteCreds IceCreds
 		// Block here waiting for ice credentials from remote peer
-		t := time.NewTimer(time.Second * 15)
-	L:
-		for {
-			// Send offer to remote peer with local credentials
-			peer.node.sendPeerIceOffer(peer.ID, localUfrag, localPwd)
-			select {
-			case remoteCreds = <-peer.iceCredentials:
-				t.Stop()
-				break L
-			case <-t.C:
-				t.Reset(time.Second * 10)
-			case <-ctx.Done():
-				peer.connecting.Store(false)
-				return
+		func() {
+			t := time.NewTimer(time.Second * 10)
+			timeout := time.NewTicker(time.Second * 30)
+
+			for {
+				// Send offer to remote peer with local credentials
+				peer.node.sendPeerIceOffer(peer.ID, localUfrag, localPwd)
+				select {
+				case remoteCreds = <-peer.iceCredentials:
+					t.Stop()
+					timeout.Stop()
+					return
+				case <-t.C:
+					t.Reset(time.Second * 10)
+					continue
+				case <-timeout.C:
+					t.Stop()
+					peer.connecting.Store(false)
+					return
+				}
 			}
-		}
+		}()
 
 		if err = peer.agent.GatherCandidates(); err != nil {
 			log.Println("error gathering candidates: ", err)
@@ -255,6 +258,8 @@ func (peer *Peer) InitiateConnection() {
 		// Async loop to add remote candidates when received
 		go peer.receiveRemoteCandidates()
 
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		defer cancel()
 		// Block here until dialing succeeds with remote candidate pair
 		peer.conn, err = peer.agent.Dial(ctx, remoteCreds.ufrag, remoteCreds.pwd)
 		if err != nil {
@@ -271,9 +276,6 @@ func (peer *Peer) RespondConnection(creds IceCreds) {
 	}
 	peer.connecting.Store(true)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*35)
-		defer cancel()
-
 		localUfrag, localPwd, err := peer.agent.GetLocalUserCredentials()
 		if err != nil {
 			log.Println("error getting local user credentials: ", err)
@@ -292,6 +294,8 @@ func (peer *Peer) RespondConnection(creds IceCreds) {
 		// Async loop to add remote candidates when received
 		peer.receiveRemoteCandidates()
 
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		defer cancel()
 		peer.conn, err = peer.agent.Accept(ctx, creds.ufrag, creds.pwd)
 		if err != nil {
 			log.Printf("error accepting remote peer %d: %v", peer.ID, err)
