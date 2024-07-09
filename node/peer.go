@@ -91,7 +91,7 @@ func (node *Node) AddPeer(peerInfo *proto.Peer) (*Peer, error) {
 		case ice.ConnectionStateCompleted:
 			// Final candidate pair selected, stop candidate receiver routine
 			log.Printf("peer %d connection completed", peer.ID)
-			peer.candidatesDone <- struct{}{}
+			peer.cancelReceiveRemoteCandidates()
 		case ice.ConnectionStateConnected:
 			peer.connecting.Store(false)
 			peer.inTransport.Store(true)
@@ -99,7 +99,7 @@ func (node *Node) AddPeer(peerInfo *proto.Peer) (*Peer, error) {
 			log.Printf("peer %d connected", peer.ID)
 		case ice.ConnectionStateDisconnected:
 			if peer.inTransport.Load() {
-				peer.inTransport.Store(false)
+				//peer.inTransport.Store(false)
 				peer.pendingLock.Lock()
 			}
 			log.Printf("peer %d disconnected", peer.ID)
@@ -107,8 +107,8 @@ func (node *Node) AddPeer(peerInfo *proto.Peer) (*Peer, error) {
 			peer.connecting.Store(false)
 			if peer.inTransport.Load() {
 				peer.inTransport.Store(false)
-				peer.pendingLock.Lock()
 			}
+			peer.cancelReceiveRemoteCandidates()
 			log.Printf("peer %d ice connection failed", peer.ID)
 		case ice.ConnectionStateClosed:
 			log.Printf("peer %d closed agent", peer.ID)
@@ -135,9 +135,9 @@ func (node *Node) AddPeer(peerInfo *proto.Peer) (*Peer, error) {
 
 	// TODO Add methods to manipulate map
 	node.maps.l.Lock()
-	defer node.maps.l.Unlock()
 	node.maps.id[peer.ID] = peer
 	node.maps.ip[peer.IP] = peer
+	node.maps.l.Unlock()
 
 	return peer, nil
 }
@@ -217,20 +217,34 @@ func (peer *Peer) InitiateConnection() {
 	}
 	peer.connecting.Store(true)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*50)
 		defer cancel()
 
 		localUfrag, localPwd, err := peer.agent.GetLocalUserCredentials()
 		if err != nil {
 			log.Println("error getting local user credentials: ", err)
+			peer.connecting.Store(false)
 			return
 		}
 
-		// Send offer to remote peer with local credentials
-		peer.node.sendPeerIceOffer(peer.ID, localUfrag, localPwd)
-
+		var remoteCreds IceCreds
 		// Block here waiting for ice credentials from remote peer
-		remoteCreds := <-peer.iceCredentials
+		t := time.NewTimer(time.Second * 15)
+	L:
+		for {
+			// Send offer to remote peer with local credentials
+			peer.node.sendPeerIceOffer(peer.ID, localUfrag, localPwd)
+			select {
+			case remoteCreds = <-peer.iceCredentials:
+				t.Stop()
+				break L
+			case <-t.C:
+				t.Reset(time.Second * 10)
+			case <-ctx.Done():
+				peer.connecting.Store(false)
+				return
+			}
+		}
 
 		if err = peer.agent.GatherCandidates(); err != nil {
 			log.Println("error gathering candidates: ", err)
@@ -244,14 +258,7 @@ func (peer *Peer) InitiateConnection() {
 		// Block here until dialing succeeds with remote candidate pair
 		peer.conn, err = peer.agent.Dial(ctx, remoteCreds.ufrag, remoteCreds.pwd)
 		if err != nil {
-			cancel()
-			log.Println("error dialing remote peer: ", err)
-			err = peer.agent.Restart(localUfrag, localPwd)
-			if err != nil {
-				log.Printf("error restarting ice agent for peer %d", peer.ID)
-			}
-			log.Printf("stopping connection attempts for peer %d", peer.ID)
-			peer.candidatesDone <- struct{}{}
+			log.Printf("error dialing remote peer %d: %v", peer.ID, err)
 			return
 		}
 	}()
@@ -264,7 +271,7 @@ func (peer *Peer) RespondConnection(creds IceCreds) {
 	}
 	peer.connecting.Store(true)
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*120)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*35)
 		defer cancel()
 
 		localUfrag, localPwd, err := peer.agent.GetLocalUserCredentials()
@@ -287,15 +294,16 @@ func (peer *Peer) RespondConnection(creds IceCreds) {
 
 		peer.conn, err = peer.agent.Accept(ctx, creds.ufrag, creds.pwd)
 		if err != nil {
-			cancel()
-			peer.candidatesDone <- struct{}{}
-			err = peer.agent.Restart(localUfrag, localPwd)
-			if err != nil {
-				log.Printf("error restarting ice agent for peer %d", peer.ID)
-				return
-			}
+			log.Printf("error accepting remote peer %d: %v", peer.ID, err)
 		}
 	}()
+}
+
+func (peer *Peer) cancelReceiveRemoteCandidates() {
+	select {
+	case peer.candidatesDone <- struct{}{}:
+	default:
+	}
 }
 
 func (peer *Peer) receiveRemoteCandidates() {
@@ -325,7 +333,7 @@ func (peer *Peer) ResetState() {
 
 	peer.mu.Lock()
 	defer peer.mu.Unlock()
-
+	peer.agent.Close()
 	peer.inTransport.Store(false)
 }
 
