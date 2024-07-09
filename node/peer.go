@@ -90,8 +90,8 @@ func (node *Node) AddPeer(peerInfo *proto.Peer) (*Peer, error) {
 		switch c {
 		case ice.ConnectionStateCompleted:
 			// Final candidate pair selected, stop candidate receiver routine
-			peer.candidatesDone <- struct{}{}
 			log.Printf("peer %d connection completed", peer.ID)
+			peer.candidatesDone <- struct{}{}
 		case ice.ConnectionStateConnected:
 			peer.connecting.Store(false)
 			peer.inTransport.Store(true)
@@ -283,7 +283,7 @@ func (peer *Peer) RespondConnection(creds IceCreds) {
 		}
 
 		// Async loop to add remote candidates when received
-		go peer.receiveRemoteCandidates()
+		peer.receiveRemoteCandidates()
 
 		peer.conn, err = peer.agent.Accept(ctx, creds.ufrag, creds.pwd)
 		if err != nil {
