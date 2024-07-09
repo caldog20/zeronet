@@ -72,7 +72,6 @@ func (node *Node) StartUpdateStream(ctx context.Context) error {
 						return
 					}
 					log.Printf("error receiving stream update response: %v", err)
-					return
 				}
 				node.HandleUpdate(response)
 			}
