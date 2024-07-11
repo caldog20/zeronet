@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"net/netip"
 	"strings"
@@ -28,7 +27,7 @@ func (n *Node) Up(ctx context.Context, req *nodev1.UpRequest) (*nodev1.UpRespons
 func (n *Node) Down(ctx context.Context, req *nodev1.DownRequest) (*nodev1.DownResponse, error) {
 	err := n.Stop()
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Internal, err.Error())
 	}
 
 	return &nodev1.DownResponse{Status: "node is stopped"}, nil
@@ -55,7 +54,7 @@ func (n *Node) Login(ctx context.Context, req *nodev1.LoginRequest) (*nodev1.Log
 			if e.Code() == codes.Unauthenticated {
 				info, err := n.grpcClient.client.GetPKCEAuthInfo(context.Background(), &controllerv1.GetPKCEAuthInfoRequest{})
 				if err != nil {
-					return nil, errors.New("error getting pkce info for auth flow")
+					return nil, status.Error(codes.Internal, ("error getting pkce info for auth flow"))
 				}
 				return &nodev1.LoginResponse{
 					Status:        "need access token",
@@ -67,7 +66,7 @@ func (n *Node) Login(ctx context.Context, req *nodev1.LoginRequest) (*nodev1.Log
 				}, nil
 			}
 		} else {
-			return nil, err
+			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}
 
