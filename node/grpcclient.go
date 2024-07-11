@@ -145,6 +145,10 @@ func (c *ControllerClient) RunUpdateStream(ctx context.Context) {
 	}
 }
 
+func (c *ControllerClient) SubmitUpdate(update *controllerv1.UpdateRequest) {
+	c.txUpdates <- update
+}
+
 func getErrorFromStatus(err error) (codes.Code, string) {
 	s, ok := status.FromError(err)
 	if ok {
@@ -195,7 +199,7 @@ func (node *Node) sendPeerCandidate(id uint32, candidate string) {
 			Candidate:  candidate,
 		},
 	}
-	node.grpcClient.txUpdates <- update
+	node.grpcClient.SubmitUpdate(update)
 }
 
 func (node *Node) sendPeerIceOffer(id uint32, ufrag, pwd string) {
@@ -208,7 +212,7 @@ func (node *Node) sendPeerIceOffer(id uint32, ufrag, pwd string) {
 			Pwd:        pwd,
 		},
 	}
-	node.grpcClient.txUpdates <- update
+	node.grpcClient.SubmitUpdate(update)
 }
 
 func (node *Node) sendPeerIceAnswer(id uint32, ufrag, pwd string) {
@@ -221,7 +225,7 @@ func (node *Node) sendPeerIceAnswer(id uint32, ufrag, pwd string) {
 			Pwd:        pwd,
 		},
 	}
-	node.grpcClient.txUpdates <- update
+	node.grpcClient.SubmitUpdate(update)
 }
 
 func (node *Node) handleIceUpdate(update *controllerv1.IceUpdate) {

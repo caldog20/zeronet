@@ -17,7 +17,6 @@ import (
 	"github.com/caldog20/machineid"
 	"github.com/caldog20/zeronet/node/conn"
 	"github.com/caldog20/zeronet/node/tun"
-	controllerv1 "github.com/caldog20/zeronet/proto/gen/controller/v1"
 	nodev1 "github.com/caldog20/zeronet/proto/gen/node/v1"
 	"github.com/flynn/noise"
 	"github.com/pion/ice/v3"
@@ -61,11 +60,10 @@ type Node struct {
 	runCtx    context.Context
 	runCancel context.CancelFunc
 	nodev1.UnimplementedNodeServiceServer
-	machineID       string
-	hostname        string
-	loggedIn        atomic.Bool
-	stunUrls        []*stun.URI
-	outboundUpdates chan *controllerv1.UpdateRequest
+	machineID string
+	hostname  string
+	loggedIn  atomic.Bool
+	stunUrls  []*stun.URI
 }
 
 func NewNode(controller string, port uint16) (*Node, error) {
