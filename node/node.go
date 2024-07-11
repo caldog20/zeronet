@@ -194,12 +194,7 @@ func (node *Node) Run() error {
 	//}
 
 	//go node.ReadUDPPackets(node.OnUDPPacket, 0)
-	node.outboundUpdates = make(chan *controllerv1.UpdateRequest, 3)
-	err = node.StartUpdateStream(node.runCtx)
-	if err != nil {
-		close(node.outboundUpdates)
-		return err
-	}
+	node.StartUpdateStream(node.runCtx)
 	go node.ReadTunPackets(node.OnTunnelPacket)
 
 	//go node.stunRoutine()
@@ -230,7 +225,6 @@ func (node *Node) Stop() error {
 	node.tun.Close()
 
 	node.running.Store(false)
-	close(node.outboundUpdates)
 	//node.grpcClient.Close()
 	//node.grpcClient = nil
 	return nil
