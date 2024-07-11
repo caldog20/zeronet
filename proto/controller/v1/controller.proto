@@ -39,8 +39,7 @@ message LoginPeerRequest {
   string machine_id = 1;
   string public_key = 2;
   string hostname = 3;
-  string endpoint = 4;
-  string access_token = 5;
+  string access_token = 4;
 }
 
 message LoginPeerResponse { PeerConfig config = 1; }

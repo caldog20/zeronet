@@ -12,7 +12,6 @@ type Peer struct {
 	NoisePublicKey string `json:"-"          gorm:"uniqueIndex,not null"`
 	IP             string `json:"ip"         gorm:"uniqueIndex"`
 	Prefix         string `json:"prefix"     gorm:"not null"`
-	Endpoint       string `json:"endpoint"`
 	Hostname       string `json:"hostname"`
 
 	LoggedIn  bool   `json:"logged_in"`
@@ -34,7 +33,6 @@ func (p *Peer) Copy() *Peer {
 		p.NoisePublicKey,
 		p.IP,
 		p.Prefix,
-		p.Endpoint,
 		p.Hostname,
 		p.Connected,
 		p.LoggedIn,
@@ -54,7 +52,6 @@ func (p *Peer) Proto() *ctrlv1.Peer {
 		PublicKey: p.NoisePublicKey,
 		Hostname:  p.Hostname,
 		Ip:        p.IP,
-		Endpoint:  p.Endpoint,
 		Prefix:    p.Prefix,
 		User:      p.User,
 		Connected: p.Connected,
@@ -68,7 +65,6 @@ func (p *Peer) ProtoDetails() *ctrlv1.PeerDetails {
 		PublicKey: p.NoisePublicKey,
 		Hostname:  p.Hostname,
 		Ip:        p.IP,
-		Endpoint:  p.Endpoint,
 		Prefix:    p.Prefix,
 		User:      p.User,
 		Connected: p.Connected,

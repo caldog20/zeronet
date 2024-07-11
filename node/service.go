@@ -37,13 +37,14 @@ func (n *Node) Down(ctx context.Context, req *nodev1.DownRequest) (*nodev1.DownR
 func (n *Node) Login(ctx context.Context, req *nodev1.LoginRequest) (*nodev1.LoginResponse, error) {
 	n.noise.l.RLock()
 	pubkey := base64.StdEncoding.EncodeToString(n.noise.keyPair.Public)
+	mid := n.machineID
+	hostname := n.hostname
 	n.noise.l.RUnlock()
 
 	loginRequest := &controllerv1.LoginPeerRequest{
-		MachineId:   n.machineID,
+		MachineId:   mid,
 		PublicKey:   pubkey,
-		Hostname:    n.hostname,
-		Endpoint:    n.discoveredEndpoint,
+		Hostname:    hostname,
 		AccessToken: req.GetAccessToken(),
 	}
 
