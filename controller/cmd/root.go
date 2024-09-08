@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -102,18 +103,18 @@ var (
 			mux := runtime.NewServeMux()
 
 			opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-			err = controllerv1.RegisterControllerServiceHandlerFromEndpoint(
+			if err = controllerv1.RegisterControllerServiceHandlerFromEndpoint(
 				egCtx,
 				mux,
 				fmt.Sprintf("localhost:%d", grpcPort),
 				opts,
-			)
+			); err != nil {
+				log.Fatal(err)
+			}
 
 			// This is faster, but disables alot of grpc features including interceptors
 			// controllerv1.RegisterControllerServiceHandlerServer(egCtx, mux, grpcServer)
-			if err != nil {
-				log.Fatal(err)
-			}
+
 			log.Printf("starting grpc http proxy server on port: %d", httpPort)
 			gwServer := &http.Server{
 				Addr: fmt.Sprintf(":%d", httpPort),
@@ -127,11 +128,12 @@ var (
 			}
 
 			eg.Go(func() error {
-				if err := gwServer.ListenAndServe(); err != http.ErrServerClosed {
+				if err := gwServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 					return err
 				}
 				return nil
 			})
+
 			// Cleanup
 			eg.Go(func() error {
 				<-egCtx.Done()
@@ -152,7 +154,7 @@ func StopHTTPServer(s *http.Server) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	err := s.Shutdown(ctx)
-	if err == context.DeadlineExceeded {
+	if errors.Is(err, context.DeadlineExceeded) {
 		s.Close()
 	}
 }

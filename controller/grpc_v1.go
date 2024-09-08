@@ -28,6 +28,9 @@ func (s *GRPCServer) GetPKCEAuthInfo(
 	ctx context.Context,
 	req *ctrlv1.GetPKCEAuthInfoRequest,
 ) (*ctrlv1.GetPKCEAuthInfoResponse, error) {
+	if s.authEnabled == false {
+		return nil, status.Error(codes.NotFound, "authentication disabled")
+	}
 	return s.tokenValidator.GetPKCEAuthInfo(), nil
 }
 
@@ -119,11 +122,11 @@ func (s *GRPCServer) UpdateStream(stream ctrlv1.ControllerService_UpdateStreamSe
 	}
 
 	if peer.IsDisabled() {
-		return status.Error(codes.Internal, "peer is currently disabled")
+		return status.Error(codes.PermissionDenied, "peer is currently disabled")
 	}
 
 	if !peer.IsLoggedIn() {
-		return status.Error(codes.Internal, "peer requires login first")
+		return status.Error(codes.PermissionDenied, "peer requires login first")
 	}
 
 	log.Printf("peer %d connected to update stream", peer.ID)
@@ -192,7 +195,7 @@ func (s *GRPCServer) UpdateStream(stream ctrlv1.ControllerService_UpdateStreamSe
 			err = stream.Send(update)
 			if err != nil {
 				log.Printf("peer %d error sending data on stream", peer.ID)
-				// return status.Error(codes.Internal, "error sending data on stream")
+				return status.Error(codes.Internal, "error sending data on stream")
 			}
 		}
 	}
@@ -202,6 +205,7 @@ func (s *GRPCServer) extractAndValidateToken(ctx context.Context) (string, error
 	if !s.authEnabled {
 		return "debug", nil
 	}
+
 	token, err := extractTokenMetadata(ctx)
 	if err != nil {
 		return "", err
