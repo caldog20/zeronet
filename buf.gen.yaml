@@ -1,22 +1,24 @@
-version: v1
+---
+version: v2
 managed:
   enabled: true
-  go_package_prefix:
-    default: github.com/caldog20/zeronet/proto/gen
-    except:
-      - buf.build/googleapis/googleapis
-      - buf.build/grpc-ecosystem/grpc-gateway
+  disable:
+    - module: buf.build/googleapis/googleapis
+  override:
+    - file_option: go_package_prefix
+      value: example/proto/gen
 plugins:
-  - plugin: buf.build/protocolbuffers/go
+  - remote: buf.build/protocolbuffers/go
     out: proto/gen
     opt: paths=source_relative
-  - plugin: buf.build/grpc/go
+  - remote: buf.build/grpc/go
     out: proto/gen
     opt: paths=source_relative
-  - plugin: buf.build/grpc-ecosystem/gateway
+  - remote: buf.build/grpc-ecosystem/gateway
     out: proto/gen
-    opt: 
-      - paths=source_relative 
-      - generate_unbound_methods=false
-  - plugin: buf.build/grpc-ecosystem/openapiv2:v2.19.1
+    opt: [paths=source_relative, generate_unbound_methods=false]
+  - remote: buf.build/grpc-ecosystem/openapiv2:v2.19.1
     out: third_party/OpenAPI
+    opt: [generate_unbound_methods=false]
+inputs:
+  - directory: proto

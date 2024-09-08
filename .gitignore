@@ -31,15 +31,15 @@ patches/
 .idea/
 
 # Other Stuff
-.DS_Store
-*.db
+**/.DS_Store
+*.db*
 *.pprof
 
 # Temporary
 
 # Generated protobuf/grpc stubs
 proto/gen
-third_party/OpenAPI
+**/*.swagger.json
 
 # Test executables
 cmd/client

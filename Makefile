@@ -53,14 +53,14 @@ buf-lint:
 deps:
 	@go install github.com/bufbuild/buf/cmd/buf@latest
 	@go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-	@go install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
+	# @go install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
 
 
 clean:
 	rm -rf $(BIN_DIR)
 	rm -rf proto/gen
 	#rm -rf store.db
-	rm -rf third_party/OpenAPI
+	rm -rf third_party/OpenAPI/controller third_party/OpenAPI/node
 
 clean-db:
 	@rm -f store.db
