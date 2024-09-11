@@ -33,13 +33,17 @@ generate:
 	go generate ./...
 
 controller: buf
-	go build -o $(BIN_DIR)/controller cmd/controller/main.go
+	CGO_ENABLED=1 go build -o $(BIN_DIR)/controller cmd/controller/main.go
+
 
 run-controller: controller
 	$(BIN_DIR)/controller
 
 node: buf
 	go build -o $(BIN_DIR)/node cmd/node/main.go
+
+node-win: buf
+	GOOS=windows GOARCH=arm64 go build -o $(BIN_DIR)/node cmd/node/main.go
 
 buf: $(PROTO_OUTPUT)
 
