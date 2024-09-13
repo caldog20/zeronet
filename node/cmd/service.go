@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"runtime"
 	"time"
 
 	"github.com/caldog20/zeronet/node"
@@ -27,7 +28,7 @@ var (
 type program struct {
 	node   *node.Node
 	server *grpc.Server
-	//done   chan struct{}
+	// done   chan struct{}
 	conn net.Listener
 }
 
@@ -42,7 +43,7 @@ func (p *program) Start(s service.Service) error {
 
 	p.server = server
 	p.node = n
-	//p.done = make(chan struct{})
+	// p.done = make(chan struct{})
 
 	go p.run()
 	return nil
@@ -55,7 +56,7 @@ func (p *program) Stop(s service.Service) error {
 }
 
 func (p *program) run() {
-	conn, err := net.Listen("tcp", fmt.Sprintf(":%d", 55000))
+	conn, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", 55000))
 	if err != nil {
 		logger.Error(err)
 		return
@@ -71,7 +72,7 @@ func NewStartCommand() *cobra.Command {
 		Short: "start service",
 		Long:  "",
 		Run: func(cmd *cobra.Command, args []string) {
-			//fmt.Println("please use a subcommand or use -h for help")
+			// fmt.Println("please use a subcommand or use -h for help")
 
 			prg := &program{}
 
@@ -96,13 +97,21 @@ func NewStartCommand() *cobra.Command {
 // TODO Fix arguments for service when providing argument for controller address
 func NewService(program service.Interface) (service.Service, error) {
 	options := make(service.KeyValue)
-	options["Restart"] = "on-success"
 	options["SuccessExitStatus"] = "1 2 8 SIGKILL"
+	if runtime.GOOS == "windows" {
+		options["OnFailure"] = "restart"
+	}
+
 	svcConfig := &service.Config{
-		Name:        "com.zeronet.node.service",
-		DisplayName: "Zeronet Node Service",
-		Description: "Zeronet Node Service",
+		Name:        "node",
+		DisplayName: "Zeronet",
+		Description: "Zeronet",
 		Option:      options,
+		Arguments: []string{
+			"run",
+			"--controller",
+			controller,
+		},
 	}
 
 	s, err := service.New(program, svcConfig)
@@ -114,69 +123,15 @@ func NewUpCommand() *cobra.Command {
 		Use:   "up",
 		Short: "runs node service",
 		Run: func(cmd *cobra.Command, args []string) {
-			dialCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-			defer cancel()
+			client, close := getManagementClient()
+			defer close()
 
-			conn, err := grpc.DialContext(dialCtx, "127.0.0.1:55000", grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
+			if err := up(client); err != nil {
 				log.Fatal(err)
 			}
-
-			client := nodev1.NewNodeServiceClient(conn)
-
-			up, err := client.Up(context.Background(), &nodev1.UpRequest{})
-			if err != nil {
-				st, ok := status.FromError(err)
-				if !ok {
-					log.Fatal(err)
-				}
-				if st.Code() == codes.PermissionDenied {
-					if err := login(); err != nil {
-						log.Fatal(err)
-					}
-					up, err = client.Up(context.Background(), &nodev1.UpRequest{})
-					if err != nil {
-						log.Fatal(err)
-					}
-				}
-			}
-
-			log.Println(up.GetStatus())
 		},
 	}
-
 	return cmd
-}
-
-func login() error {
-	dialCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	defer cancel()
-	conn, err := grpc.DialContext(dialCtx, "127.0.0.1:55000", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	client := nodev1.NewNodeServiceClient(conn)
-
-	login, err := client.Login(context.Background(), &nodev1.LoginRequest{AccessToken: ""})
-	if err != nil {
-		return err
-	}
-
-	st := login.GetStatus()
-	if st == "login successful" {
-		log.Println("node login successful")
-	} else if st == "need access token" {
-		token, err := node.AuthFlow(login)
-		if err != nil {
-			return err
-		}
-		login, err = client.Login(context.Background(), &nodev1.LoginRequest{AccessToken: token})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func NewLoginCommand() *cobra.Command {
@@ -184,7 +139,10 @@ func NewLoginCommand() *cobra.Command {
 		Use:   "login",
 		Short: "login",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := login(); err != nil {
+			client, close := getManagementClient()
+			defer close()
+
+			if err := login(client); err != nil {
 				log.Fatal(err)
 			}
 		},
@@ -217,7 +175,7 @@ func NewRunCommand() *cobra.Command {
 }
 
 func NewInstallCommand() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "install the background service",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -231,6 +189,12 @@ func NewInstallCommand() *cobra.Command {
 			}
 		},
 	}
+
+	cmd.PersistentFlags().
+		StringVar(&controller, "controller", "127.0.0.1:50000", "controller address in <ip:port> format")
+	cmd.PersistentFlags().
+		Uint16Var(&port, "port", 0, "listen port for udp socket - defaults to 0 for randomly selected port")
+	return cmd
 }
 
 func NewUninstallCommand() *cobra.Command {
@@ -272,21 +236,93 @@ func NewDownCommand() *cobra.Command {
 		Use:   "down",
 		Short: "downs node service",
 		Run: func(cmd *cobra.Command, args []string) {
-			dialCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-			defer cancel()
-			conn, err := grpc.DialContext(dialCtx, "127.0.0.1:55000", grpc.WithTransportCredentials(insecure.NewCredentials()))
-			if err != nil {
-				log.Fatal(err)
-			}
+			client, close := getManagementClient()
+			defer close()
 
-			client := nodev1.NewNodeServiceClient(conn)
-			down, err := client.Down(context.Background(), &nodev1.DownRequest{})
-			if err != nil {
+			if err := down(client); err != nil {
 				log.Fatal(err)
 			}
-			log.Println(down.GetStatus())
 		},
 	}
 
 	return cmd
+}
+
+func getManagementClient() (nodev1.NodeServiceClient, func()) {
+	conn, err := grpc.NewClient(
+		"127.0.0.1:55000",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	client := nodev1.NewNodeServiceClient(conn)
+
+	return client, func() {
+		conn.Close()
+	}
+}
+
+func up(client nodev1.NodeServiceClient) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	up, err := client.Up(ctx, &nodev1.UpRequest{})
+	if err != nil {
+		st, ok := status.FromError(err)
+		if !ok {
+			return err
+		}
+		if st.Code() == codes.PermissionDenied {
+			if err := login(client); err != nil {
+				return err
+			}
+			up, err = client.Up(ctx, &nodev1.UpRequest{})
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	log.Println(up.GetStatus())
+	return nil
+}
+
+func down(client nodev1.NodeServiceClient) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	down, err := client.Down(ctx, &nodev1.DownRequest{})
+	if err != nil {
+		return err
+	}
+	log.Println(down.GetStatus())
+
+	return nil
+}
+
+func login(client nodev1.NodeServiceClient) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	login, err := client.Login(ctx, &nodev1.LoginRequest{AccessToken: ""})
+	if err != nil {
+		return err
+	}
+
+	st := login.GetStatus()
+	if st == "login successful" {
+		log.Println("node login successful")
+	} else if st == "need access token" {
+		token, err := node.AuthFlow(login)
+		if err != nil {
+			return err
+		}
+		login, err = client.Login(ctx, &nodev1.LoginRequest{AccessToken: token})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

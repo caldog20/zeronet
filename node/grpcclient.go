@@ -28,7 +28,12 @@ type ControllerClient struct {
 func NewControllerClient(address string) (*ControllerClient, error) {
 	dialCtx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
-	conn, err := grpc.DialContext(dialCtx, address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.DialContext(
+		dialCtx,
+		address,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+	)
 	if err != nil {
 		return nil, errors.New("error connecting to controller grpc server at: " + address)
 	}
@@ -56,7 +61,9 @@ func (c *ControllerClient) waitForConnectivityReady(ctx context.Context) bool {
 	}
 }
 
-func (c *ControllerClient) ConnectStream(ctx context.Context) (controllerv1.ControllerService_UpdateStreamClient, error) {
+func (c *ControllerClient) ConnectStream(
+	ctx context.Context,
+) (controllerv1.ControllerService_UpdateStreamClient, error) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -160,7 +167,11 @@ func getErrorFromStatus(err error) (codes.Code, string) {
 
 // TODO: Fix stream auth
 func (node *Node) StartUpdateStream(ctx context.Context) {
-	sCtx := metadata.AppendToOutgoingContext(ctx, "authorization", fmt.Sprintf("Bearer %s", node.machineID))
+	sCtx := metadata.AppendToOutgoingContext(
+		ctx,
+		"authorization",
+		fmt.Sprintf("Bearer %s", node.machineID),
+	)
 	go node.grpcClient.RunUpdateStream(sCtx)
 	go node.HandleUpdates(ctx)
 }
@@ -178,7 +189,7 @@ func (node *Node) HandleUpdates(ctx context.Context) {
 		case controllerv1.UpdateType_CONNECT:
 			node.handlePeerConnectUpdate(update)
 		case controllerv1.UpdateType_DISCONNECT:
-			//node.handlePeerDisconnectUpdate(update)
+			// node.handlePeerDisconnectUpdate(update)
 		case controllerv1.UpdateType_LOGOUT:
 			node.handleLogout()
 		case controllerv1.UpdateType_ICE:
@@ -231,11 +242,11 @@ func (node *Node) sendPeerIceAnswer(id uint32, ufrag, pwd string) {
 func (node *Node) handleIceUpdate(update *controllerv1.IceUpdate) {
 	peer, found := node.lookupPeer(update.GetPeerId())
 	if !found {
-		log.Printf("peer %s not found for ice update", update.GetPeerId())
+		log.Printf("peer %d not found for ice update", update.GetPeerId())
 		return
 	}
 
-	log.Printf("peer %s found for ice update: %v", update.GetPeerId(), update)
+	log.Printf("peer %d found for ice update: %v", update.GetPeerId(), update)
 
 	switch update.UpdateType {
 	case controllerv1.IceUpdateType_ANSWER:
