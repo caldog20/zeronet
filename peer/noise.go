@@ -15,8 +15,8 @@ const (
 )
 
 var (
-	CipherSuite = noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, noise.HashBLAKE2s)
-	BaseConfig  = noise.Config{CipherSuite: CipherSuite, Pattern: noise.HandshakeIK}
+// CipherSuite = noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, noise.HashBLAKE2s)
+// BaseConfig  = noise.Config{CipherSuite: CipherSuite, Pattern: noise.HandshakeIK}
 )
 
 type NoiseState struct {
@@ -31,7 +31,8 @@ type NoiseState struct {
 }
 
 func NewNoiseState(s noise.DHKey, rs []byte) (*NoiseState, error) {
-	config := BaseConfig
+	cs := noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, noise.HashBLAKE2s)
+	config := noise.Config{CipherSuite: cs, Pattern: noise.HandshakeIK}
 	config.PeerStatic = rs
 	config.StaticKeypair = s
 	//
@@ -65,6 +66,12 @@ func (ns *NoiseState) Initialize(initiator bool) error {
 }
 
 func (ns *NoiseState) Reset() {
+	ns.hs = nil
+	ns.rx = nil
+	ns.tx = nil
+	ns.nonce.Store(0)
+	ns.initiator = false
+	ns.state.Store(None)
 }
 
 // Construct handshake message p1 as initiator
@@ -120,6 +127,7 @@ func (ns *NoiseState) Decrypt(ciphertext, decrypted []byte, n uint64) ([]byte, e
 	if err != nil {
 		return nil, fmt.Errorf("error decrypting message: %v", err)
 	}
+	ns.nonce.Add(1)
 	return data, nil
 }
 
@@ -128,5 +136,10 @@ func (ns *NoiseState) Encrypt(plaintext, encrypted []byte, n uint64) ([]byte, er
 	if err != nil {
 		return nil, fmt.Errorf("error encrypting message: %v", err)
 	}
+	ns.nonce.Add(1)
 	return data, nil
+}
+
+func (ns *NoiseState) Nonce() uint64 {
+	return ns.nonce.Load()
 }

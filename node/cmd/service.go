@@ -58,7 +58,8 @@ func (p *program) Stop(s service.Service) error {
 func (p *program) run() {
 	conn, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", 55000))
 	if err != nil {
-		logger.Error(err)
+		//logger.Error(err)
+		log.Fatal(err)
 		return
 	}
 	if err := p.server.Serve(conn); !errors.Is(err, grpc.ErrServerStopped) {
