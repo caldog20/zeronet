@@ -1,4 +1,4 @@
-package peer
+package noiseconn
 
 import (
 	"fmt"
@@ -20,9 +20,7 @@ var (
 )
 
 type NoiseState struct {
-	initiator bool
 	state     atomic.Uint64
-	rs        []byte
 	rx        *noise.CipherState
 	tx        *noise.CipherState
 	hs        *noise.HandshakeState
@@ -30,7 +28,7 @@ type NoiseState struct {
 	nonce     atomic.Uint64
 }
 
-func NewNoiseState(s noise.DHKey, rs []byte) (*NoiseState, error) {
+func NewNoiseState(s noise.DHKey, rs []byte) *NoiseState {
 	cs := noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, noise.HashBLAKE2s)
 	config := noise.Config{CipherSuite: cs, Pattern: noise.HandshakeIK}
 	config.PeerStatic = rs
@@ -46,12 +44,15 @@ func NewNoiseState(s noise.DHKey, rs []byte) (*NoiseState, error) {
 		rx:     nil,
 		tx:     nil,
 		config: config,
-	}, nil
+	}
 }
 
 func (ns *NoiseState) Initialize(initiator bool) error {
-	ns.initiator = initiator
 	ns.config.Initiator = initiator
+  
+  if !initiator {
+    ns.config.PeerStatic = nil
+  }
 
 	hs, err := noise.NewHandshakeState(ns.config)
 	if err != nil {
@@ -70,7 +71,6 @@ func (ns *NoiseState) Reset() {
 	ns.rx = nil
 	ns.tx = nil
 	ns.nonce.Store(0)
-	ns.initiator = false
 	ns.state.Store(None)
 }
 
@@ -123,7 +123,7 @@ func (ns *NoiseState) ConsumeHandshakeP2(in []byte) error {
 }
 
 func (ns *NoiseState) Decrypt(ciphertext, decrypted []byte, n uint64) ([]byte, error) {
-	data, err := ns.rx.Decrypt(decrypted[:0], nil, ciphertext)
+	data, err := ns.rx.Decrypt(decrypted, nil, ciphertext)
 	if err != nil {
 		return nil, fmt.Errorf("error decrypting message: %v", err)
 	}
@@ -132,7 +132,7 @@ func (ns *NoiseState) Decrypt(ciphertext, decrypted []byte, n uint64) ([]byte, e
 }
 
 func (ns *NoiseState) Encrypt(plaintext, encrypted []byte, n uint64) ([]byte, error) {
-	data, err := ns.tx.Encrypt(encrypted[:0], nil, plaintext)
+	data, err := ns.tx.Encrypt(encrypted, nil, plaintext)
 	if err != nil {
 		return nil, fmt.Errorf("error encrypting message: %v", err)
 	}

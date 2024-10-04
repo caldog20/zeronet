@@ -1,25 +1,28 @@
-package peer
+package noiseconn
 
 import (
 	"crypto/rand"
 	"testing"
+
+	"github.com/flynn/noise"
 )
 
 func TestNoiseHandshake(t *testing.T) {
-	kp1, err := CipherSuite.GenerateKeypair(rand.Reader)
+	cs := noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, noise.HashBLAKE2s)
+	kp1, err := cs.GenerateKeypair(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	kp2, err := CipherSuite.GenerateKeypair(rand.Reader)
+	kp2, err := cs.GenerateKeypair(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ns1, err := NewNoiseState(kp1, kp2.Public)
+	ns1 := NewNoiseState(kp1, kp2.Public)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ns2, err := NewNoiseState(kp2, nil)
+	ns2 := NewNoiseState(kp2, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
