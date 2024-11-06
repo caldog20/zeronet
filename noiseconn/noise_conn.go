@@ -35,7 +35,7 @@ const (
 // 	Write(p []byte) (int, error)
 // }
 
-type NoiseConn struct {
+type Conn struct {
 	conn net.Conn
 
 	ns           *NoiseState
@@ -47,10 +47,10 @@ type NoiseConn struct {
 	cs           noise.CipherSuite
 }
 
-func NewNoiseConn(keypair noise.DHKey, remoteStatic []byte) *NoiseConn {
+func NewNoiseConn(keypair noise.DHKey, remoteStatic []byte) *Conn {
 	cs := noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, noise.HashBLAKE2s)
 
-	return &NoiseConn{
+	return &Conn{
 		conn:         nil,
 		state:        atomic.Uint64{},
 		mu:           sync.RWMutex{},
@@ -61,7 +61,7 @@ func NewNoiseConn(keypair noise.DHKey, remoteStatic []byte) *NoiseConn {
 	}
 }
 
-func (nc *NoiseConn) Reset() {
+func (nc *Conn) Reset() {
 	nc.mu.Lock()
 	defer nc.mu.Unlock()
 
@@ -70,19 +70,19 @@ func (nc *NoiseConn) Reset() {
 	nc.state.Store(StateIdle)
 }
 
-func (nc *NoiseConn) resetLocked() {
+func (nc *Conn) resetLocked() {
 	nc.ns.Reset()
 	nc.initiator = false
 	nc.state.Store(StateIdle)
 }
 
-func (nc *NoiseConn) SetConn(conn net.Conn) {
+func (nc *Conn) SetConn(conn net.Conn) {
 	nc.mu.Lock()
 	defer nc.mu.Unlock()
 	nc.conn = conn
 }
 
-func (nc *NoiseConn) Dial() error {
+func (nc *Conn) Dial() error {
 	state := nc.state.Load()
 
 	if state != StateIdle {
@@ -104,7 +104,7 @@ func (nc *NoiseConn) Dial() error {
 	return nil
 }
 
-func (nc *NoiseConn) Accept() error {
+func (nc *Conn) Accept() error {
 
 	state := nc.state.Load()
 	if state != StateIdle {
@@ -127,7 +127,7 @@ func (nc *NoiseConn) Accept() error {
 	return nil
 }
 
-func (nc *NoiseConn) connect(initiator bool) error {
+func (nc *Conn) connect(initiator bool) error {
 	// nc.mu.Lock()
 	// defer nc.mu.Unlock()
 
@@ -156,7 +156,7 @@ func (nc *NoiseConn) connect(initiator bool) error {
 	return nil
 }
 
-func (nc *NoiseConn) initiateHandshake() error {
+func (nc *Conn) initiateHandshake() error {
 	h := header.NewHeader()
 	attempts := 0
 
@@ -226,7 +226,7 @@ RETRY:
 	return nil
 }
 
-func (nc *NoiseConn) waitForHandshake() error {
+func (nc *Conn) waitForHandshake() error {
 	h := header.NewHeader()
 	attempts := 0
 
@@ -298,7 +298,7 @@ RETRY:
 
 // TODO: Handle receiving handshake packets during active session
 // TODO: Handle rekeys during active session
-func (nc *NoiseConn) Read(p []byte) (int, error) {
+func (nc *Conn) Read(p []byte) (int, error) {
 	if nc.ns == nil {
 		return 0, errors.New("noise state not initialized")
 	}
@@ -336,7 +336,7 @@ func (nc *NoiseConn) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-func (nc *NoiseConn) Write(p []byte) (int, error) {
+func (nc *Conn) Write(p []byte) (int, error) {
 	if nc.ns == nil {
 		return 0, errors.New("noise state not initialized")
 	}
@@ -374,7 +374,7 @@ func (nc *NoiseConn) Write(p []byte) (int, error) {
 // Close closes the noise connection, resetting the state, and
 // requiring a new conn to be set and a new Dial or Accept call to establish a
 // new connection.
-func (nc *NoiseConn) Close() error {
+func (nc *Conn) Close() error {
 	nc.mu.Lock()
 	defer nc.mu.Unlock()
 

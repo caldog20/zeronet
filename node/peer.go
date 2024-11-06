@@ -13,6 +13,7 @@ import (
 	"github.com/caldog20/zeronet/pkg/header"
 	proto "github.com/caldog20/zeronet/proto/gen/controller/v1"
 	"github.com/pion/ice/v3"
+  "github.com/caldog20/zeronet/noiseconn"
 )
 
 const (
@@ -34,7 +35,7 @@ type Peer struct {
 	pendingLock sync.RWMutex
 	Hostname    string
 
-	noiseState *NoiseState
+  noiseConn *noiseconn.Conn
 
 	agent *ice.Agent
 	conn  *ice.Conn
@@ -89,10 +90,7 @@ func (node *Node) AddPeer(peerInfo *proto.Peer) (*Peer, error) {
 
 	node.noise.l.RLock()
 	defer node.noise.l.RUnlock()
-	peer.noiseState, err = NewNoiseState(node.noise.keyPair, remoteStatic)
-	if err != nil {
-		return nil, fmt.Errorf("error creating noise state for peer: %w", err)
-	}
+  peer.noiseConn = noiseconn.NewNoiseConn(node.noise.keyPair, remoteStatic)
 
 	// TODO: Move ICE Callback configuration to separate function
 	peer.agent, err = ice.NewAgent(node.getAgentConfig())
