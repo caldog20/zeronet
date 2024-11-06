@@ -33,13 +33,17 @@ generate:
 	go generate ./...
 
 controller: buf
-	go build -o $(BIN_DIR)/controller cmd/controller/main.go
+	CGO_ENABLED=1 go build -o $(BIN_DIR)/controller cmd/controller/main.go
+
 
 run-controller: controller
 	$(BIN_DIR)/controller
 
 node: buf
 	go build -o $(BIN_DIR)/node cmd/node/main.go
+
+node-win: buf
+	GOOS=windows GOARCH=arm64 go build -o $(BIN_DIR)/node.exe cmd/node/main.go
 
 buf: $(PROTO_OUTPUT)
 
@@ -53,14 +57,14 @@ buf-lint:
 deps:
 	@go install github.com/bufbuild/buf/cmd/buf@latest
 	@go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-	@go install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
+	# @go install connectrpc.com/connect/cmd/protoc-gen-connect-go@latest
 
 
 clean:
 	rm -rf $(BIN_DIR)
 	rm -rf proto/gen
 	#rm -rf store.db
-	rm -rf third_party/OpenAPI
+	rm -rf third_party/OpenAPI/controller third_party/OpenAPI/node
 
 clean-db:
 	@rm -f store.db

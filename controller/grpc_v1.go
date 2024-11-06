@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"io"
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
@@ -16,84 +17,21 @@ type GRPCServer struct {
 	controller *Controller
 	ctrlv1.UnimplementedControllerServiceServer
 	tokenValidator *auth.TokenValidator
+	authEnabled    bool
 }
 
-func NewGRPCServer(controller *Controller, validator *auth.TokenValidator) *GRPCServer {
-	return &GRPCServer{controller: controller, tokenValidator: validator}
+func NewGRPCServer(controller *Controller, validator *auth.TokenValidator, enableAuth bool) *GRPCServer {
+	return &GRPCServer{controller: controller, tokenValidator: validator, authEnabled: enableAuth}
 }
 
 func (s *GRPCServer) GetPKCEAuthInfo(
 	ctx context.Context,
 	req *ctrlv1.GetPKCEAuthInfoRequest,
 ) (*ctrlv1.GetPKCEAuthInfoResponse, error) {
+	if s.authEnabled == false {
+		return nil, status.Error(codes.NotFound, "authentication disabled")
+	}
 	return s.tokenValidator.GetPKCEAuthInfo(), nil
-}
-
-func (s *GRPCServer) UpdateEndpoint(ctx context.Context, req *ctrlv1.UpdateEndpointRequest) (*ctrlv1.UpdateEndpointResponse, error) {
-	if !validateMachineID(req.GetMachineId()) {
-		log.Debugf("invalid or no machine id in request. got: %s", req.GetMachineId())
-		return nil, status.Error(codes.InvalidArgument, "invalid machine ID")
-	}
-
-	peer := s.controller.db.GetPeerByMachineID(req.GetMachineId())
-
-	if peer == nil {
-		return nil, status.Error(codes.NotFound, "peer not found")
-	}
-
-	if peer.IsDisabled() {
-		return nil, status.Error(codes.Internal, "peer is currently disabled")
-	}
-
-	if !peer.IsLoggedIn() {
-		return nil, status.Error(codes.Internal, "peer requires login first")
-	}
-
-	if peer.IsAuthExpired() {
-		return nil, status.Error(codes.PermissionDenied, "peer auth expired, login again")
-	}
-
-	if req.GetEndpoint() == "" {
-		return nil, status.Error(codes.InvalidArgument, "empty endpoint")
-	}
-
-	err := s.controller.db.UpdatePeerEndpoint(peer.ID, req.GetEndpoint())
-	if err != nil {
-		return nil, status.Error(codes.Internal, "failed to update endpoint")
-	}
-
-	return &ctrlv1.UpdateEndpointResponse{}, nil
-}
-
-func (s *GRPCServer) Punch(ctx context.Context, req *ctrlv1.PunchRequest) (*ctrlv1.PunchResponse, error) {
-	if !validateMachineID(req.GetMachineId()) {
-		return nil, status.Error(codes.InvalidArgument, "invalid machine ID")
-	}
-
-	peer := s.controller.db.GetPeerByMachineID(req.GetMachineId())
-	if peer == nil {
-		return nil, status.Error(codes.NotFound, "peer not found")
-	}
-
-	if peer.IsDisabled() {
-		return nil, status.Error(codes.Internal, "peer is currently disabled")
-	}
-
-	if !peer.IsLoggedIn() {
-		return nil, status.Error(codes.Internal, "peer requires login first")
-	}
-
-	if peer.IsAuthExpired() {
-		return nil, status.Error(codes.PermissionDenied, "peer auth expired, login again")
-	}
-
-	if req.GetEndpoint() == "" {
-		return nil, status.Error(codes.InvalidArgument, "empty endpoint")
-	}
-
-	s.controller.PeerPunchRequest(req.GetDstPeerId(), req.GetEndpoint())
-
-	return &ctrlv1.PunchResponse{}, nil
 }
 
 func (s *GRPCServer) LoginPeer(
@@ -165,8 +103,16 @@ func (s *GRPCServer) LoginPeer(
 	return &ctrlv1.LoginPeerResponse{Config: peer.ProtoConfig()}, nil
 }
 
-func (s *GRPCServer) UpdateStream(req *ctrlv1.UpdateRequest, stream ctrlv1.ControllerService_UpdateStreamServer) error {
-	peer := s.controller.db.GetPeerByMachineID(req.GetMachineId())
+func (s *GRPCServer) UpdateStream(stream ctrlv1.ControllerService_UpdateStreamServer) error {
+	mid, err := extractTokenMetadata(stream.Context())
+	if err != nil {
+		return err
+	}
+	if !validateMachineID(mid) {
+		return status.Error(codes.InvalidArgument, "invalid machine ID in context")
+	}
+
+	peer := s.controller.db.GetPeerByMachineID(mid)
 	if peer == nil {
 		return status.Error(codes.NotFound, "peer with machine id is not registered")
 	}
@@ -176,16 +122,16 @@ func (s *GRPCServer) UpdateStream(req *ctrlv1.UpdateRequest, stream ctrlv1.Contr
 	}
 
 	if peer.IsDisabled() {
-		return status.Error(codes.Internal, "peer is currently disabled")
+		return status.Error(codes.PermissionDenied, "peer is currently disabled")
 	}
 
 	if !peer.IsLoggedIn() {
-		return status.Error(codes.Internal, "peer requires login first")
+		return status.Error(codes.PermissionDenied, "peer requires login first")
 	}
 
 	log.Printf("peer %d connected to update stream", peer.ID)
 
-	err := s.controller.db.SetPeerConnected(peer, true)
+	err = s.controller.db.SetPeerConnected(peer, true)
 	if err != nil {
 		return status.Error(codes.Internal, "error setting peer connected status")
 	}
@@ -215,6 +161,25 @@ func (s *GRPCServer) UpdateStream(req *ctrlv1.UpdateRequest, stream ctrlv1.Contr
 		return status.Error(codes.Internal, "error sending data on stream")
 	}
 
+	go func() {
+		for {
+			select {
+			case <-stream.Context().Done():
+				return
+			default:
+			}
+			in, err := stream.Recv()
+			if err != nil {
+				if err == io.EOF {
+					return
+				}
+				log.Printf("peer %d error receiving data on stream", peer.ID)
+				continue
+			}
+			s.controller.handleUpdateRequest(peer.ID, in)
+		}
+	}()
+
 	for {
 		select {
 		case <-stream.Context().Done():
@@ -227,75 +192,38 @@ func (s *GRPCServer) UpdateStream(req *ctrlv1.UpdateRequest, stream ctrlv1.Contr
 				log.Printf("peer %d channel closed, stopping stream", peer.ID)
 				return status.Error(codes.Aborted, "server closed update stream")
 			}
-			if update != nil {
-				err = stream.Send(update)
-				if err != nil {
-					log.Printf("peer %d error sending data on stream", peer.ID)
-					// return status.Error(codes.Internal, "error sending data on stream")
-				}
+			err = stream.Send(update)
+			if err != nil {
+				log.Printf("peer %d error sending data on stream", peer.ID)
+				return status.Error(codes.Internal, "error sending data on stream")
 			}
 		}
 	}
 }
 
-// //////////////////////////////
-// GRPC Gateway API Methods
-// //////////////////////////////
-func (s *GRPCServer) GetPeers(
-	ctx context.Context,
-	req *ctrlv1.GetPeersRequest,
-) (*ctrlv1.GetPeersResponse, error) {
+func (s *GRPCServer) extractAndValidateToken(ctx context.Context) (string, error) {
+	if !s.authEnabled {
+		return "debug", nil
+	}
 
 	token, err := extractTokenMetadata(ctx)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	_, err = s.validateAccessToken(token)
+
+	user, err := s.validateAccessToken(token)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	peers, err := s.controller.db.GetPeers()
-	if err != nil {
-		return nil, status.Error(codes.Internal, "error getting peers from database")
-	}
-
-	var p []*ctrlv1.PeerDetails
-	for _, peer := range peers {
-		p = append(p, peer.ProtoDetails())
-	}
-
-	return &ctrlv1.GetPeersResponse{Peers: p}, nil
-}
-
-func (s *GRPCServer) DeletePeer(
-	ctx context.Context,
-	req *ctrlv1.DeletePeerRequest,
-) (*ctrlv1.DeletePeerResponse, error) {
-
-	token, err := extractTokenMetadata(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.validateAccessToken(token)
-	if err != nil {
-		return nil, err
-	}
-
-	err = s.controller.DeletePeer(req.GetPeerId())
-	if err != nil {
-		// TODO: Fix this
-		if err.Error() == "peer doesn't exist" {
-			return nil, status.Error(codes.NotFound, "peer not found")
-		}
-		return nil, status.Error(codes.Internal, "error deleting peer")
-	}
-
-	return &ctrlv1.DeletePeerResponse{}, nil
+	return user, nil
 }
 
 func (s *GRPCServer) validateAccessToken(token string) (string, error) {
+	if !s.authEnabled {
+		return "debug", nil
+	}
+
 	userId, err := s.tokenValidator.ValidateAccessToken(token)
 	if err != nil {
 		return "", status.Error(

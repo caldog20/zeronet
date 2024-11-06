@@ -2,10 +2,12 @@ package db
 
 import (
 	"fmt"
+	"runtime"
 
-	"github.com/glebarez/sqlite"
+	// "github.com/glebarez/sqlite"
 	log "github.com/sirupsen/logrus"
 	gormv2logrus "github.com/thomas-tacquet/gormv2-logrus"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
@@ -21,7 +23,7 @@ func New(path string, e *log.Entry) (*Store, error) {
 	gormLogger.LogMode(logger.Info)
 
 	db, err := gorm.Open(
-		sqlite.Open(fmt.Sprintf("file:%s?cache=shared&_journal_mode=WAL", path)),
+		sqlite.Open(fmt.Sprintf("file:%s?cache=shared&_journal_mode=WAL&_synchronous=1", path)),
 		&gorm.Config{
 			PrepareStmt: true,
 			Logger:      gormLogger,
@@ -36,8 +38,7 @@ func New(path string, e *log.Entry) (*Store, error) {
 		return nil, err
 	}
 
-	sqlDB.SetMaxIdleConns(3)
-	sqlDB.SetMaxOpenConns(3)
+	sqlDB.SetMaxOpenConns(runtime.NumCPU())
 
 	err = sqlDB.Ping()
 	if err != nil {

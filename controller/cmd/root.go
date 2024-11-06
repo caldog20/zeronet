@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -73,12 +74,17 @@ var (
 
 			ctrl := controller.NewController(db, pfix)
 
-			tokenValidator, err := auth.NewTokenValidator(ctx)
-			if err != nil {
-				log.Fatalf("error creating token validator: %s", err)
+			var tokenValidator *auth.TokenValidator = nil
+
+			if !debug {
+				tokenValidator, err = auth.NewTokenValidator(ctx)
+				if err != nil {
+					log.Fatalf("error creating token validator: %s", err)
+				}
 			}
+
 			// GRPC Server
-			grpcServer := controller.NewGRPCServer(ctrl, tokenValidator)
+			grpcServer := controller.NewGRPCServer(ctrl, tokenValidator, !debug)
 			server := grpc.NewServer(grpc.UnaryInterceptor(middleware.NewUnaryLogInterceptor()))
 			controllerv1.RegisterControllerServiceServer(server, grpcServer)
 			reflection.Register(server)
@@ -97,21 +103,21 @@ var (
 			mux := runtime.NewServeMux()
 
 			opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-			err = controllerv1.RegisterControllerServiceHandlerFromEndpoint(
+			if err = controllerv1.RegisterControllerServiceHandlerFromEndpoint(
 				egCtx,
 				mux,
-				"localhost:50000",
+				fmt.Sprintf("localhost:%d", grpcPort),
 				opts,
-			)
-
-			// This is faster, but disables alot of grpc features including interceptors
-			// controllerv1.RegisterControllerServiceHandlerServer(egCtx, mux, grpcServer)
-			if err != nil {
+			); err != nil {
 				log.Fatal(err)
 			}
 
+			// This is faster, but disables alot of grpc features including interceptors
+			// controllerv1.RegisterControllerServiceHandlerServer(egCtx, mux, grpcServer)
+
+			log.Printf("starting grpc http proxy server on port: %d", httpPort)
 			gwServer := &http.Server{
-				Addr: ":8080",
+				Addr: fmt.Sprintf(":%d", httpPort),
 				Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					if strings.HasPrefix(r.URL.Path, "/api") {
 						mux.ServeHTTP(w, r)
@@ -122,11 +128,12 @@ var (
 			}
 
 			eg.Go(func() error {
-				if err := gwServer.ListenAndServe(); err != http.ErrServerClosed {
+				if err := gwServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 					return err
 				}
 				return nil
 			})
+
 			// Cleanup
 			eg.Go(func() error {
 				<-egCtx.Done()
@@ -147,7 +154,7 @@ func StopHTTPServer(s *http.Server) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	err := s.Shutdown(ctx)
-	if err == context.DeadlineExceeded {
+	if errors.Is(err, context.DeadlineExceeded) {
 		s.Close()
 	}
 }

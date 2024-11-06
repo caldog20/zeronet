@@ -2,6 +2,7 @@ package node
 
 import (
 	"cmp"
+	"crypto/rand"
 	"encoding/base64"
 	"errors"
 	"log"
@@ -13,6 +14,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type IceCreds struct {
+	ufrag string
+	pwd   string
+}
+
 type Key struct {
 	Public  string `yaml:"PublicKey"`
 	Private string `yaml:"PrivateKey"`
@@ -20,7 +26,8 @@ type Key struct {
 
 func GenerateNewKeypair() (noise.DHKey, error) {
 	log.Println("generating new noise keypair")
-	keypair, err := CipherSuite.GenerateKeypair(nil)
+	cs := noise.NewCipherSuite(noise.DH25519, noise.CipherChaChaPoly, noise.HashBLAKE2s)
+	keypair, err := cs.GenerateKeypair(rand.Reader)
 	if err != nil {
 		return noise.DHKey{}, err
 	}
@@ -29,8 +36,8 @@ func GenerateNewKeypair() (noise.DHKey, error) {
 	//	return noise.DHKey{}, err
 	//}
 	//fmt.Println("WARNING! Do not share private key")
-	//fmt.Println("public key: ", base64.StdEncoding.EncodeToString(keypair.Public))
-	//fmt.Println("private key: ", base64.StdEncoding.EncodeToString(keypair.Private))
+	// fmt.Println("public key: ", base64.StdEncoding.EncodeToString(keypair.Public))
+	// fmt.Println("private key: ", base64.StdEncoding.EncodeToString(keypair.Private))
 	return keypair, nil
 }
 

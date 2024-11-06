@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package proto;
-option go_package = "github.com/caldog20/zeronet/proto/gen;controllerv1";
+option go_package = "controllerv1";
 
 import "google/api/annotations.proto";
 import "controller/v1/peer.proto";
@@ -13,38 +13,45 @@ service ControllerService {
   rpc GetPKCEAuthInfo(GetPKCEAuthInfoRequest)
       returns (GetPKCEAuthInfoResponse) {}
 
+  rpc GetPeer(GetPeerRequest) returns (GetPeerResponse) {
+    option (google.api.http) = {
+      get : "/api/v1/peers/{peer_id}",
+    };
+  }
+
   rpc GetPeers(GetPeersRequest) returns (GetPeersResponse) {
     option (google.api.http) = {
       get : "/api/v1/peers",
     };
   }
+
   rpc DeletePeer(DeletePeerRequest) returns (DeletePeerResponse) {
     option (google.api.http) = {
       delete : "/api/v1/peers/{peer_id}"
     };
   }
 
-  rpc UpdateStream(UpdateRequest) returns (stream UpdateResponse) {}
-  rpc UpdateEndpoint(UpdateEndpointRequest) returns (UpdateEndpointResponse) {}
-  rpc Punch(PunchRequest) returns (PunchResponse) {}
+
+  rpc UpdateStream(stream UpdateRequest) returns (stream UpdateResponse) {}
 }
 
 message LoginPeerRequest {
   string machine_id = 1;
   string public_key = 2;
   string hostname = 3;
-  string endpoint = 4;
-  string access_token = 5;
+  string access_token = 4;
 }
 
 message LoginPeerResponse { PeerConfig config = 1; }
 
 // TODO: Move to different proto file after testing
 
-message GetPeersRequest {}
+message GetPeerRequest {uint32 peer_id = 1;}
+message GetPeerResponse { PeerDetails peer = 1; }
 
+
+message GetPeersRequest {}
 message GetPeersResponse { repeated PeerDetails peers = 1; }
 
 message DeletePeerRequest { uint32 peer_id = 1; }
-
 message DeletePeerResponse {}

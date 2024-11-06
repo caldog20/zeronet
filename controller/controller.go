@@ -41,7 +41,6 @@ func (c *Controller) ProcessPeerLogin(peer *types.Peer, req *ctrlv1.LoginPeerReq
 	peer.LastLogin = time.Now()
 	peer.NoisePublicKey = req.GetPublicKey() // TODO: Validate public key
 	peer.Hostname = req.GetHostname()
-	peer.Endpoint = req.GetEndpoint()
 	peer.Connected = false
 	peer.LoggedIn = true
 
@@ -127,7 +126,6 @@ func (c *Controller) RegisterPeer(
 		Hostname:       req.GetHostname(),
 		Prefix:         c.prefix.String(),
 		IP:             ip,
-		Endpoint:       req.GetEndpoint(),
 		Connected:      false,
 		LoggedIn:       true,
 		LastAuth:       time.Now(),

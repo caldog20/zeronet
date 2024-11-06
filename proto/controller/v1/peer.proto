@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 package proto;
-option go_package = "github.com/caldog20/zeronet/proto/gen;controllerv1";
+option go_package = "controllerv1";
 
 // TODO Remove some of these details as this is a remote peer message
 //  for other peers to use to make connections
@@ -11,11 +11,9 @@ message Peer {
   string public_key = 2;
   string hostname = 3;
   string ip = 4;
-  // TODO probably need to hold list of recent endpoints
-  string endpoint = 5;
-  string prefix = 6;
-  string user = 7;
-  bool connected = 8;
+  string prefix = 5;
+  string user = 6;
+  bool connected = 7;
 }
 
 message PeerDetails {
@@ -23,16 +21,15 @@ message PeerDetails {
   string public_key = 2;
   string hostname = 3;
   string ip = 4;
-  string endpoint = 5;
-  string prefix = 6;
-  string user = 7;
-  bool connected = 8;
-  string machine_id = 9;
-  bool disabled = 10;
-  string last_login = 11;
-  string last_auth = 12;
-  string created_at = 13;
-  string updated_at = 14;
+  string prefix = 5;
+  string user = 6;
+  bool connected = 7;
+  string machine_id = 8;
+  bool disabled = 9;
+  string last_login = 10;
+  string last_auth = 11;
+  string created_at = 12;
+  string updated_at = 13;
 }
 
 message PeerConfig {
@@ -41,38 +38,43 @@ message PeerConfig {
   string prefix = 3;
 }
 
-message UpdateEndpointRequest {
-  string machine_id = 1;
-  string endpoint = 2;
-}
-
-message UpdateEndpointResponse {}
-
-message UpdateRequest { string machine_id = 1; }
 
 enum UpdateType {
   INIT = 0;
   CONNECT = 1;
   DISCONNECT = 2;
-  PUNCH = 3;
+  ICE = 3;
   LOGOUT = 4;
+}
+
+message UpdateRequest {
+  UpdateType update_type = 1;
+  string machine_id = 2;
+  IceUpdate ice_update = 3;
 }
 
 message UpdateResponse {
   UpdateType update_type = 1;
   PeerList peer_list = 2;
-  string punch_endpoint = 3;
+  IceUpdate ice_update = 3;
 }
 
-message PunchRequest {
-  string machine_id = 1;
-  uint32 dst_peer_id = 2;
-  string endpoint = 3;
+enum IceUpdateType {
+  OFFER = 0;
+  ANSWER = 1;
+  CANDIDATE = 2;
+  RESET = 3;
 }
 
-message PunchResponse {}
+message IceUpdate {
+  IceUpdateType update_type = 1;
+  uint32 peer_id = 2;
+  string ufrag = 3;
+  string pwd = 4;
+  string candidate = 5;
+}
 
-message PunchNotification { string endpoint = 1; }
+message Empty {}
 
 message PeerList {
   repeated Peer peers = 1;

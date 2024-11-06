@@ -1,57 +1,42 @@
+---
 # This workflow will build a golang project
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
 name: ZeroNet Linux Build
-
 on:
   push:
-    branches: [ "main" ]
-    paths:
-      - '**.go'
-      - '**.proto'
-      - '.github/workflows/build-linux.yml'
+    branches: [main]
+    paths: ['**.go', '**.proto', .github/workflows/build-linux.yml]
   pull_request:
-    branches: [ "main" ]
-
+    branches: [main]
 jobs:
-
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.22'
-      
+          go-version: '1.23'
+
       # - name: install nodejs and npm
       #   run: sudo apt-get update && sudo apt-get install nodejs npm
       #
       # - name: build frontend static site
       #   run: make frontend
-
       - name: Download dependencies
         run: go mod download
-
       - name: Verify dependencies
         run: go mod verify
-
 #      - name: Install golint
 #        run: go install golang.org/x/lint/golint@latest
-
       - name: Install Buf deps
         run: make deps
-
       - name: Generate proto/grpc
         run: make buf
-      
       - name: Build Controller
         run: make controller
-
       - name: Build Node
         run: make node
-
 
       #- name: Test
       # run: go test
@@ -60,4 +45,3 @@ jobs:
 #      run: |
 #        go vet ./...
 #        golint ./...
-
